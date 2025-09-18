@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 HELM_IMAGE="alpine/helm:3.13.2"
-KUBECTL_IMAGE="bitnami/kubectl:latest"
+KUBECTL_IMAGE="alpine/kubectl:latest"
 
 # Function to check if Docker is available
 check_docker() {
