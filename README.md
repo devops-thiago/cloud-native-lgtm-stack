@@ -258,7 +258,6 @@ If you need to run Helm commands manually without local installation:
 # Run kubectl in container
 .\scripts\helm-container.ps1 --kubectl get nodes
 ```
-```
 
 **Benefits of Containerized Helm:**
 - No need to install Helm locally
