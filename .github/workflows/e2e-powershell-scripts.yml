@@ -2,13 +2,13 @@ name: E2E Tests - PowerShell Scripts
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'scripts/*.ps1'
       - 'values/*.yaml'
       - '.github/workflows/e2e-powershell-scripts.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'scripts/*.ps1'
       - 'values/*.yaml'
