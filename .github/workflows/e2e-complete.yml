@@ -2,13 +2,13 @@ name: E2E Tests - Complete Cross-Platform
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'scripts/*'
       - 'values/*.yaml'
       - '.github/workflows/e2e-complete.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'scripts/*'
       - 'values/*.yaml'

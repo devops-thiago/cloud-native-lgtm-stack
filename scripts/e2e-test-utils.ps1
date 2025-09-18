@@ -98,12 +98,15 @@ function Test-Installation {
                 return $releases
             }
         }
-        elseif ((Test-Command "docker") -and (docker info 2>$null | Out-Null; $LASTEXITCODE -eq 0)) {
-            # Use containerized Helm
-            $scriptPath = Join-Path $PSScriptRoot "helm-container.ps1"
-            $releases = & $scriptPath list -n $Namespace --output json 2>$null
+        elseif (Test-Command "docker") {
+            docker info 2>$null | Out-Null
             if ($LASTEXITCODE -eq 0) {
-                return $releases
+                # Use containerized Helm
+                $scriptPath = Join-Path $PSScriptRoot "helm-container.ps1"
+                $releases = & $scriptPath list -n $Namespace --output json 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    return $releases
+                }
             }
         }
         else {
@@ -184,12 +187,15 @@ function Test-Uninstallation {
                 return $releases
             }
         }
-        elseif ((Test-Command "docker") -and (docker info 2>$null | Out-Null; $LASTEXITCODE -eq 0)) {
-            # Use containerized Helm
-            $scriptPath = Join-Path $PSScriptRoot "helm-container.ps1"
-            $releases = & $scriptPath list -n $Namespace --output json 2>$null
+        elseif (Test-Command "docker") {
+            docker info 2>$null | Out-Null
             if ($LASTEXITCODE -eq 0) {
-                return $releases
+                # Use containerized Helm
+                $scriptPath = Join-Path $PSScriptRoot "helm-container.ps1"
+                $releases = & $scriptPath list -n $Namespace --output json 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    return $releases
+                }
             }
         }
         else {

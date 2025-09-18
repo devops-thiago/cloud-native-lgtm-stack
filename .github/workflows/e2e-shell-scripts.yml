@@ -2,13 +2,13 @@ name: E2E Tests - Shell Scripts
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'scripts/*.sh'
       - 'values/*.yaml'
       - '.github/workflows/e2e-shell-scripts.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'scripts/*.sh'
       - 'values/*.yaml'
