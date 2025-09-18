@@ -1,0 +1,182 @@
+name: E2E Tests - PowerShell Scripts
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'scripts/*.ps1'
+      - 'values/*.yaml'
+      - '.github/workflows/e2e-powershell-scripts.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'scripts/*.ps1'
+      - 'values/*.yaml'
+      - '.github/workflows/e2e-powershell-scripts.yml'
+  workflow_dispatch:
+
+jobs:
+  test-with-local-helm:
+    name: Test PowerShell Scripts with Local Helm
+    runs-on: windows-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.2'
+
+    - name: Install kind
+      run: |
+        choco install kind
+        kind version
+
+    - name: Create kind cluster
+      run: |
+        kind create cluster --name lgtm-test-local-helm --wait 300s
+        kubectl cluster-info
+
+    - name: Verify cluster and tools
+      run: |
+        kubectl cluster-info
+        kubectl get nodes
+        helm version
+
+    - name: Run installation script
+      shell: pwsh
+      run: |
+        cd scripts
+        $env:NAMESPACE = "lgtm-test"
+        $env:RELEASE_PREFIX = "test"
+        .\install.ps1 -Namespace "lgtm-test" -ReleasePrefix "test"
+
+    - name: Verify installation
+      shell: pwsh
+      run: |
+        # Wait for pods to be ready
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s
+        
+        # Check if all expected releases are installed
+        helm list -n lgtm-test
+        
+        # Verify pods are running
+        kubectl get pods -n lgtm-test
+        kubectl get services -n lgtm-test
+
+    - name: Run uninstallation script
+      shell: pwsh
+      run: |
+        cd scripts
+        $env:NAMESPACE = "lgtm-test"
+        $env:RELEASE_PREFIX = "test"
+        .\uninstall.ps1 -Namespace "lgtm-test" -ReleasePrefix "test"
+
+    - name: Verify uninstallation
+      shell: pwsh
+      run: |
+        # Check that helm releases are removed
+        $releases = helm list -n lgtm-test
+        if ($releases -match "test") {
+          Write-Host "ERROR: Helm releases still exist after uninstall"
+          helm list -n lgtm-test
+          exit 1
+        }
+        
+        # Check that most pods are removed (some may be terminating)
+        Start-Sleep -Seconds 10
+        try { kubectl get pods -n lgtm-test } catch { Write-Host "Namespace may have been removed" }
+
+  test-with-containerized-helm:
+    name: Test PowerShell Scripts with Containerized Helm
+    runs-on: windows-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Install kind
+      run: |
+        choco install kind
+        kind version
+
+    - name: Create kind cluster
+      run: |
+        kind create cluster --name lgtm-test-container-helm --wait 300s
+        kubectl cluster-info
+
+    - name: Verify cluster and Docker (no Helm)
+      run: |
+        kubectl cluster-info
+        kubectl get nodes
+        docker version
+        # Verify Helm is not installed to force containerized mode
+        try { helm version; Write-Host "ERROR: Helm should not be installed"; exit 1 } catch { Write-Host "Helm not found - good for containerized test" }
+
+    - name: Run installation script (containerized Helm)
+      shell: pwsh
+      run: |
+        cd scripts
+        $env:NAMESPACE = "lgtm-test"
+        $env:RELEASE_PREFIX = "test"
+        .\install.ps1 -Namespace "lgtm-test" -ReleasePrefix "test"
+
+    - name: Verify installation
+      shell: pwsh
+      run: |
+        # Wait for pods to be ready
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s
+        
+        # Check if all expected releases are installed using containerized helm
+        cd scripts
+        .\helm-container.ps1 list -n lgtm-test
+        
+        # Verify pods are running
+        kubectl get pods -n lgtm-test
+        kubectl get services -n lgtm-test
+
+    - name: Run uninstallation script (containerized Helm)
+      shell: pwsh
+      run: |
+        cd scripts
+        $env:NAMESPACE = "lgtm-test"
+        $env:RELEASE_PREFIX = "test"
+        .\uninstall.ps1 -Namespace "lgtm-test" -ReleasePrefix "test"
+
+    - name: Verify uninstallation
+      shell: pwsh
+      run: |
+        # Check that helm releases are removed using containerized helm
+        cd scripts
+        $releases = .\helm-container.ps1 list -n lgtm-test
+        if ($releases -match "test") {
+          Write-Host "ERROR: Helm releases still exist after uninstall"
+          .\helm-container.ps1 list -n lgtm-test
+          exit 1
+        }
+        
+        # Check that most pods are removed (some may be terminating)
+        Start-Sleep -Seconds 10
+        try { kubectl get pods -n lgtm-test } catch { Write-Host "Namespace may have been removed" }

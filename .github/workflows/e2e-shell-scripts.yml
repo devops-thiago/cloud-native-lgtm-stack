@@ -1,0 +1,162 @@
+name: E2E Tests - Shell Scripts
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'scripts/*.sh'
+      - 'values/*.yaml'
+      - '.github/workflows/e2e-shell-scripts.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'scripts/*.sh'
+      - 'values/*.yaml'
+      - '.github/workflows/e2e-shell-scripts.yml'
+  workflow_dispatch:
+
+jobs:
+  test-with-local-helm:
+    name: Test Shell Scripts with Local Helm
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Create kind cluster
+      uses: helm/kind-action@v1
+      with:
+        cluster_name: lgtm-test-local-helm
+        kubectl_version: v1.28.0
+        
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.13.2'
+
+    - name: Verify cluster and tools
+      run: |
+        kubectl cluster-info
+        kubectl get nodes
+        helm version
+
+    - name: Run installation script
+      run: |
+        cd scripts
+        chmod +x install.sh
+        export NAMESPACE=lgtm-test
+        export RELEASE_PREFIX=test
+        ./install.sh
+
+    - name: Verify installation
+      run: |
+        # Wait for pods to be ready
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s || true
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s || true
+        
+        # Check if all expected releases are installed
+        helm list -n lgtm-test
+        
+        # Verify pods are running
+        kubectl get pods -n lgtm-test
+        kubectl get services -n lgtm-test
+
+    - name: Run uninstallation script
+      run: |
+        cd scripts
+        chmod +x uninstall.sh
+        export NAMESPACE=lgtm-test
+        export RELEASE_PREFIX=test
+        ./uninstall.sh
+
+    - name: Verify uninstallation
+      run: |
+        # Check that helm releases are removed
+        if helm list -n lgtm-test | grep -q test; then
+          echo "ERROR: Helm releases still exist after uninstall"
+          helm list -n lgtm-test
+          exit 1
+        fi
+        
+        # Check that most pods are removed (some may be terminating)
+        sleep 10
+        kubectl get pods -n lgtm-test || echo "Namespace may have been removed"
+
+  test-with-containerized-helm:
+    name: Test Shell Scripts with Containerized Helm
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Create kind cluster
+      uses: helm/kind-action@v1
+      with:
+        cluster_name: lgtm-test-container-helm
+        kubectl_version: v1.28.0
+
+    - name: Remove Helm (to force containerized mode)
+      run: |
+        # Remove helm if it exists to test containerized mode
+        sudo rm -f /usr/local/bin/helm || true
+        which helm && echo "ERROR: Helm still found" && exit 1 || echo "Helm removed successfully"
+
+    - name: Verify cluster and Docker
+      run: |
+        kubectl cluster-info
+        kubectl get nodes
+        docker version
+
+    - name: Run installation script (containerized Helm)
+      run: |
+        cd scripts
+        chmod +x install.sh helm-container.sh
+        export NAMESPACE=lgtm-test
+        export RELEASE_PREFIX=test
+        ./install.sh
+
+    - name: Verify installation
+      run: |
+        # Wait for pods to be ready
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s || true
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s || true
+        
+        # Check if all expected releases are installed using containerized helm
+        cd scripts
+        ./helm-container.sh list -n lgtm-test
+        
+        # Verify pods are running
+        kubectl get pods -n lgtm-test
+        kubectl get services -n lgtm-test
+
+    - name: Run uninstallation script (containerized Helm)
+      run: |
+        cd scripts
+        chmod +x uninstall.sh
+        export NAMESPACE=lgtm-test
+        export RELEASE_PREFIX=test
+        ./uninstall.sh
+
+    - name: Verify uninstallation
+      run: |
+        # Check that helm releases are removed using containerized helm
+        cd scripts
+        if ./helm-container.sh list -n lgtm-test | grep -q test; then
+          echo "ERROR: Helm releases still exist after uninstall"
+          ./helm-container.sh list -n lgtm-test
+          exit 1
+        fi
+        
+        # Check that most pods are removed (some may be terminating)
+        sleep 10
+        kubectl get pods -n lgtm-test || echo "Namespace may have been removed"
