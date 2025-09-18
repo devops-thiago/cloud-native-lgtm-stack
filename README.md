@@ -60,6 +60,7 @@ Perfect for learning, experimentation, and understanding how modern observabilit
 ## 🎯 Features
 
 - **Complete Observability**: Full metrics, logs, and traces collection and storage
+- **Cross-Platform Support**: Both Bash (Linux/macOS) and PowerShell (Windows) scripts included
 - **Environment Adaptive**: Auto-detects Docker Desktop vs standard Kubernetes
 - **Resource Optimized**: LAB/TESTING configurations with production guidance in comments
 - **Single Node Ready**: Optimized for Minikube, Kind, Docker Desktop environments  
@@ -113,9 +114,16 @@ cd cloud-native-ltgm-stack
 
 ### 2. Install the Stack
 
+**Linux/macOS (Bash):**
 ```bash
 cd scripts
 ./install.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+cd scripts
+.\install.ps1
 ```
 
 ### 3. Access Applications
@@ -160,10 +168,18 @@ Each component is configured with minimal resource requests suitable for develop
 
 You can customize the deployment using environment variables:
 
+**Linux/macOS (Bash):**
 ```bash
 export NAMESPACE=observability    # Default: default
 export RELEASE_PREFIX=my-ltgm     # Default: ltgm
 ./scripts/install.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:NAMESPACE = "observability"    # Default: default
+$env:RELEASE_PREFIX = "my-ltgm"     # Default: ltgm
+.\scripts\install.ps1
 ```
 
 ### Custom Values
@@ -209,6 +225,7 @@ helm install ltgm-node-exporter prometheus-community/prometheus-node-exporter \
 
 If you need to run Helm commands manually without local installation:
 
+**Linux/macOS (Bash):**
 ```bash
 # Use the containerized Helm wrapper
 ./scripts/helm-container.sh version
@@ -223,6 +240,24 @@ If you need to run Helm commands manually without local installation:
 
 # Run kubectl in container
 ./scripts/helm-container.sh --kubectl get nodes
+```
+
+**Windows (PowerShell):**
+```powershell
+# Use the containerized Helm wrapper
+.\scripts\helm-container.ps1 version
+.\scripts\helm-container.ps1 repo list
+.\scripts\helm-container.ps1 list -A
+
+# Test cluster connectivity
+.\scripts\helm-container.ps1 --test-connection
+
+# Pre-pull container images
+.\scripts\helm-container.ps1 --pull-images
+
+# Run kubectl in container
+.\scripts\helm-container.ps1 --kubectl get nodes
+```
 ```
 
 **Benefits of Containerized Helm:**
@@ -337,9 +372,17 @@ If Kubernetes dashboards show no data:
    ```
 
 3. **Update dashboards**:
+   
+   **Linux/macOS (Bash):**
    ```bash
    cd scripts
    ./update-grafana-dashboards.sh
+   ```
+   
+   **Windows (PowerShell):**
+   ```powershell
+   cd scripts
+   .\update-grafana-dashboards.ps1
    ```
 
 4. **Check metric availability in Grafana**:
@@ -357,9 +400,17 @@ If you encounter problems with containerized Helm:
    ```
 
 2. **Test containerized Helm directly**:
+   
+   **Linux/macOS (Bash):**
    ```bash
    ./scripts/helm-container.sh --test-connection
    ./scripts/helm-container.sh version
+   ```
+   
+   **Windows (PowerShell):**
+   ```powershell
+   .\scripts\helm-container.ps1 --test-connection
+   .\scripts\helm-container.ps1 version
    ```
 
 3. **Pre-pull images manually**:
@@ -369,8 +420,15 @@ If you encounter problems with containerized Helm:
    ```
 
 4. **Check kubeconfig access**:
+   
+   **Linux/macOS (Bash):**
    ```bash
    ./scripts/helm-container.sh --kubectl cluster-info
+   ```
+   
+   **Windows (PowerShell):**
+   ```powershell
+   .\scripts\helm-container.ps1 --kubectl cluster-info
    ```
 
 ## 📁 Project Structure
@@ -391,10 +449,15 @@ cloud-native-ltgm-stack/
 │   └── node-exporter-docker-desktop-daemonset.yaml # Node-exporter (Docker Desktop)
 ├── scripts/
 │   ├── install.sh                                  # Smart installation (local/containerized Helm)
+│   ├── install.ps1                                 # PowerShell version for Windows
 │   ├── uninstall.sh                               # Complete cleanup
+│   ├── uninstall.ps1                              # PowerShell version for Windows
 │   ├── update-grafana-dashboards.sh               # Dashboard updates
+│   ├── update-grafana-dashboards.ps1              # PowerShell version for Windows
 │   ├── helm-container.sh                          # Containerized Helm wrapper
-│   └── helm-utils.sh                              # Helm detection utilities
+│   ├── helm-container.ps1                         # PowerShell version for Windows
+│   ├── helm-utils.sh                              # Helm detection utilities
+│   └── helm-utils.ps1                             # PowerShell version for Windows
 └── docs/                                           # Additional documentation
 ```
 
@@ -402,9 +465,16 @@ cloud-native-ltgm-stack/
 
 To completely remove the stack:
 
+**Linux/macOS (Bash):**
 ```bash
 cd scripts
 ./uninstall.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+cd scripts
+.\uninstall.ps1
 ```
 
 This will:
