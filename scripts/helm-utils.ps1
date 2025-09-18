@@ -232,7 +232,7 @@ function Show-HelmInfo {
         }
         "container" {
             Write-ColorOutput "  Mode: Containerized Helm" "Blue"
-            Write-ColorOutput "  Image: alpine/helm:3.13.2" "Blue"
+            Write-ColorOutput "  Image: $HELM_IMAGE" "Blue"
             Write-ColorOutput "  Note: Requires Docker to be running" "Yellow"
         }
         default {
