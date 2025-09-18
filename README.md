@@ -450,7 +450,7 @@ If you encounter problems with containerized Helm:
 3. **Pre-pull images manually**:
    ```bash
    docker pull alpine/helm:3.13.2
-   docker pull bitnami/kubectl:latest
+   docker pull alpine/kubectl:latest
    ```
 
 4. **Check kubeconfig access**:

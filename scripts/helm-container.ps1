@@ -10,7 +10,7 @@ param(
 
 # Configuration
 $HELM_IMAGE = "alpine/helm:3.13.2"
-$KUBECTL_IMAGE = "bitnami/kubectl:latest"
+$KUBECTL_IMAGE = "alpine/kubectl:latest"
 
 # Function to write colored output
 function Write-ColorOutput {
