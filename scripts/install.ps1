@@ -110,7 +110,7 @@ Write-Host ""
 
 # Wait for Minio to be ready
 Write-ColorOutput "⏳ Waiting for Minio to be ready..." "Yellow"
-kubectl wait --for=condition=ready pod -l "release=ltgm-minio" -n $Namespace --timeout=300s
+kubectl wait --for=condition=ready pod -l "release=${ReleasePrefix}-minio" -n $Namespace --timeout=300s
 
 Write-ColorOutput "✅ Minio is ready" "Green"
 Write-Host ""
