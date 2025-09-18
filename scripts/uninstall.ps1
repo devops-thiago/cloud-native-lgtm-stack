@@ -111,7 +111,7 @@ Write-ColorOutput "🧹 Cleaning up Persistent Volume Claims..." "Yellow"
 
 try {
     $pvcList = kubectl get pvc -n $Namespace --no-headers 2>$null | Where-Object { 
-        $_ -match "($ReleasePrefix|loki|tempo|mimir|grafana|minio|alloy)" 
+        $_ -match "$ReleasePrefix"
     } | ForEach-Object { ($_ -split '\s+')[0] }
     
     if ($pvcList) {
