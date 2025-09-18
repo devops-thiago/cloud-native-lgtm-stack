@@ -1,0 +1,210 @@
+# Grafana Visualization Dashboard Configuration
+# FOR: LAB/TESTING - Single-node development with pre-configured datasources
+# PRODUCTION: Enable persistence, change credentials, configure SSL/TLS
+
+# Resource configuration - LAB/TESTING values
+resources:
+  requests:
+    cpu: "100m"                # PRODUCTION: Consider 200m+ for better performance
+    memory: "256Mi"             # PRODUCTION: Consider 512Mi+ for large dashboards
+  limits:
+    cpu: "500m"                # PRODUCTION: Scale to 1000m+ for high-traffic use
+    memory: "512Mi"             # PRODUCTION: Scale to 1Gi+ based on usage
+
+# Replica configuration
+replicas: 1                     # PRODUCTION: Consider 2+ for HA with proper storage
+
+# Storage configuration - LAB/TESTING (data loss on restart)
+persistence:
+  enabled: false                # PRODUCTION: Enable with appropriate storage class
+
+# Network access - LAB/TESTING (direct NodePort access)
+service:
+  type: NodePort                # PRODUCTION: Use ClusterIP + Ingress + SSL
+  port: 80
+  nodePort: 32000              # PRODUCTION: Remove NodePort, use LoadBalancer/Ingress
+
+
+# Datasources configuration
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      # Loki datasource
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://ltgm-loki-loki-distributed-gateway.default.svc.cluster.local
+        isDefault: false
+        editable: true
+        jsonData:
+          maxLines: 1000
+      
+      # Tempo datasource
+      - name: Tempo
+        type: tempo
+        access: proxy
+        url: http://ltgm-tempo-gateway.default.svc.cluster.local
+        isDefault: false
+        editable: true
+        jsonData:
+          httpMethod: GET
+          serviceMap:
+            datasourceUid: loki
+          search:
+            hide: false
+          nodeGraph:
+            enabled: true
+          traceQuery:
+            timeShiftEnabled: true
+            spanStartTimeShift: 1h
+            spanEndTimeShift: 1h
+          spanBar:
+            type: Tag
+            tag: http.status_code
+      
+      # Mimir (Prometheus) datasource
+      - name: Mimir
+        type: prometheus
+        access: proxy
+        url: http://ltgm-mimir-nginx.default.svc.cluster.local/prometheus
+        isDefault: true
+        editable: true
+        jsonData:
+          httpMethod: POST
+          prometheusType: Mimir
+          prometheusVersion: 2.40.0
+
+# Dashboards configuration
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+# Default dashboards from Grafana.com - keeping working ones only
+dashboards:
+  default:
+    # Loki dashboard
+    loki-dashboard:
+      gnetId: 13407
+      revision: 1
+      datasource: Loki
+    
+    # Tempo dashboard
+    tempo-dashboard:
+      gnetId: 16795
+      revision: 2
+      datasource: Tempo
+    
+    # Node Exporter dashboard
+    node-exporter-dashboard:
+      gnetId: 1860
+      revision: 29
+      datasource: Mimir
+    
+    # Note: Custom Kubernetes dashboards will be loaded via sidecar from ConfigMap
+    # Custom dashboards: kubernetes-cluster-overview, kubernetes-pod-resources, container-usage
+
+# Grafana configuration
+grafana.ini:
+  server:
+    domain: localhost
+    root_url: http://localhost:32000
+    serve_from_sub_path: false
+  
+# Security settings - LAB/TESTING
+  security:
+    admin_user: $__env{GF_SECURITY_ADMIN_USER}        # PRODUCTION: Use proper auth (LDAP/OAuth)
+    admin_password: $__env{GF_SECURITY_ADMIN_PASSWORD} # PRODUCTION: Use secrets, not env vars
+    allow_embedding: true                              # PRODUCTION: Disable for security
+  
+  # Users settings
+  users:
+    allow_sign_up: false
+    auto_assign_org: true
+    auto_assign_org_role: Viewer
+  
+  # Auth settings
+  auth.anonymous:
+    enabled: false
+  
+  # Explore settings
+  explore:
+    enabled: true
+  
+  # Alerting disabled for resource saving
+  alerting:
+    enabled: false
+  
+  # Unified alerting disabled
+  unified_alerting:
+    enabled: false
+
+# Plugins configuration (tempo datasource is built-in now)
+plugins: []
+
+# RBAC configuration
+rbac:
+  create: true
+  pspEnabled: false
+
+# Service account
+serviceAccount:
+  create: true
+  autoMount: true
+
+# Pod disruption budget disabled
+podDisruptionBudget:
+  enabled: false
+
+# Ingress disabled
+ingress:
+  enabled: false
+
+# ServiceMonitor disabled
+serviceMonitor:
+  enabled: false
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Environment variables - LAB/TESTING configuration
+env:
+  GF_EXPLORE_ENABLED: "true"                    # PRODUCTION: Keep enabled for debugging
+  GF_DISABLE_SANITIZE_HTML: "true"              # PRODUCTION: Enable sanitization for security
+  GF_PANELS_DISABLE_SANITIZE_HTML: "true"       # PRODUCTION: Enable sanitization for security
+  GF_SECURITY_ADMIN_USER: "admin"               # PRODUCTION: Use Kubernetes secrets
+  GF_SECURITY_ADMIN_PASSWORD: "admin123"        # PRODUCTION: Use strong password + secrets
+
+# Sidecar configuration for auto-loading custom dashboards
+sidecar:
+  dashboards:
+    enabled: true
+    searchNamespace: ALL
+    label: grafana_dashboard
+    labelValue: "1"
+    folderAnnotation: grafana_folder
+    provider:
+      foldersFromFilesStructure: true
+  datasources:
+    enabled: false
+
+# Image configuration
+image:
+  repository: grafana/grafana
+  tag: ""
+  pullPolicy: IfNotPresent

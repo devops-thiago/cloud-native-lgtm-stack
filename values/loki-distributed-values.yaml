@@ -1,0 +1,234 @@
+# Loki Distributed values for single-node Kubernetes with Minio backend
+# Using official Grafana loki-distributed Helm chart
+
+# Global settings
+global:
+  image:
+    registry: docker.io
+  clusterDomain: cluster.local
+  dnsService: kube-dns
+  dnsNamespace: kube-system
+
+# Loki configuration
+loki:
+  # Disable authentication for simplicity
+  auth_enabled: false
+  
+  # Common configuration
+  commonConfig:
+    replication_factor: 1
+    ring:
+      kvstore:
+        store: inmemory
+  
+  # Storage configuration using Minio S3
+  storage:
+    type: s3
+    bucketNames:
+      chunks: loki
+      ruler: loki
+      admin: loki
+    s3:
+      endpoint: minio.default.svc.cluster.local:9000
+      region: us-east-1
+      accessKeyId: admin
+      secretAccessKey: password123
+      s3ForcePathStyle: true
+      insecure: true
+  
+  # Schema configuration
+  schemaConfig:
+    configs:
+      - from: 2020-10-24
+        store: boltdb-shipper
+        object_store: s3
+        schema: v11
+        index:
+          prefix: index_
+          period: 24h
+  
+  # Storage configuration for indexes
+  storageConfig:
+    aws:
+      s3: s3://admin:password123@minio.default.svc.cluster.local:9000/loki
+      s3forcepathstyle: true
+    boltdb_shipper:
+      shared_store: aws
+      active_index_directory: /var/loki/boltdb-shipper-active
+      cache_location: /var/loki/boltdb-shipper-cache
+  
+  # Limits configuration
+  limits_config:
+    enforce_metric_name: false
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+    max_cache_freshness_per_query: 10m
+    split_queries_by_interval: 15m
+    ingestion_rate_mb: 8
+    ingestion_burst_size_mb: 16
+
+# Gateway configuration (nginx)
+gateway:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  service:
+    type: ClusterIP
+    port: 80
+
+# Distributor configuration
+distributor:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+
+# Ingester configuration
+ingester:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+  autoscaling:
+    enabled: false
+
+# Querier configuration
+querier:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+
+# Query Frontend configuration
+queryFrontend:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+
+# Query Scheduler configuration
+queryScheduler:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Table Manager (optional for retention)
+tableManager:
+  enabled: false
+
+# Ruler configuration (optional)
+ruler:
+  enabled: false
+
+# Compactor configuration
+compactor:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+# Index Gateway configuration
+indexGateway:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+# Memcached configurations (disabled to save resources)
+memcached:
+  enabled: false
+
+memcachedExporter:
+  enabled: false
+
+memcachedChunks:
+  enabled: false
+
+memcachedFrontend:
+  enabled: false
+
+memcachedIndexQueries:
+  enabled: false
+
+memcachedIndexWrites:
+  enabled: false
+
+# ServiceMonitor disabled
+serviceMonitor:
+  enabled: false
+
+# Promtail disabled (we're using Alloy)
+promtail:
+  enabled: false
+
+# Grafana Agent disabled
+grafanaAgent:
+  enabled: false
+
+# RBAC
+rbac:
+  pspEnabled: false
+
+# Network Policy disabled
+networkPolicy:
+  enabled: false

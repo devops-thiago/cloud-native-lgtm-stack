@@ -1,0 +1,52 @@
+# Optional Custom Dockerfile for Helm + kubectl
+# FOR: Users who prefer a single custom container image
+# USAGE: docker build -f Dockerfile.helm -t ltgm-helm .
+# NOTE: The default scripts use public images (alpine/helm, bitnami/kubectl)
+
+FROM alpine:3.19
+
+# Labels
+LABEL maintainer="LGTM Stack"
+LABEL description="Lightweight container with Helm and kubectl for LGTM stack deployment"
+LABEL version="1.0"
+
+# Install dependencies
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    bash \
+    git \
+    openssl
+
+# Install kubectl
+ENV KUBECTL_VERSION=v1.28.4
+RUN curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/kubectl
+
+# Install Helm
+ENV HELM_VERSION=v3.13.2
+RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 && \
+    chmod 700 get_helm.sh && \
+    ./get_helm.sh --version ${HELM_VERSION} && \
+    rm get_helm.sh
+
+# Create non-root user for security
+RUN addgroup -g 1001 ltgm && \
+    adduser -D -u 1001 -G ltgm ltgm
+
+# Set working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER ltgm
+
+# Default command
+CMD ["helm", "--help"]
+
+# Build instructions:
+# docker build -f Dockerfile.helm -t ltgm-helm:latest .
+#
+# Usage in helm-container.sh:
+# Replace HELM_IMAGE="alpine/helm:3.13.2" with HELM_IMAGE="ltgm-helm:latest"
+# Remove the separate kubectl container usage

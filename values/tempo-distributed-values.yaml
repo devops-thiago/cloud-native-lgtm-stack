@@ -1,0 +1,232 @@
+# Tempo Distributed values for single-node Kubernetes with Minio backend
+# Using official Grafana tempo-distributed Helm chart
+
+# Global settings
+global:
+  image:
+    registry: docker.io
+  clusterDomain: cluster.local
+
+# Tempo configuration
+tempo:
+  # Disable multitenancy
+  multitenancy_enabled: false
+  
+  # Storage configuration using Minio S3
+  storage:
+    trace:
+      backend: s3
+      s3:
+        endpoint: ltgm-minio.default.svc.cluster.local:9000
+        bucket: tempo
+        access_key: QL62Py3cx8l703E2XPTu
+        secret_key: LxHJAiPoncpu0cggl9yDf0ZUAasZyCOLFwBe4yDv
+        insecure: true
+  
+  # Single-node replication settings
+  ingester:
+    lifecycler:
+      ring:
+        replication_factor: 1
+        
+  # Retention configuration
+  retention: 24h
+  
+  # Global overrides
+  global_overrides:
+    max_traces_per_user: 50000
+    ingestion_rate_strategy: global
+    ingestion_burst_size_bytes: 20000000
+    ingestion_rate_limit_bytes: 15000000
+  
+  # Compactor configuration
+  compactor:
+    compaction:
+      compaction_window: 1h
+      max_compaction_objects: 1000000
+      block_retention: 24h
+      compacted_block_retention: 10m
+  
+  # Metrics generator disabled to save resources
+  metrics_generator:
+    enabled: false
+
+# Gateway configuration (nginx)
+gateway:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  service:
+    type: ClusterIP
+    port: 80
+
+# Distributor configuration
+distributor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+  config:
+    extend_writes: true
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      jaeger:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14250
+          thrift_compact:
+            endpoint: 0.0.0.0:6831
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+      zipkin:
+        endpoint: 0.0.0.0:9411
+
+# Ingester configuration
+ingester:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+  autoscaling:
+    enabled: false
+  config:
+    trace_idle_period: 10s
+    max_block_duration: 5m
+    max_block_bytes: 1048576
+
+# Querier configuration
+querier:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+  config:
+    frontend_worker:
+      frontend_address: tempo-query-frontend:9095
+
+# Query Frontend configuration
+queryFrontend:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+  config:
+    search:
+      duration_slo: 5s
+      throughput_bytes_slo: 1073741824
+    trace_by_id:
+      duration_slo: 5s
+
+# Compactor configuration
+compactor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+# Metrics Generator (disabled)
+metricsGenerator:
+  enabled: false
+
+# Memcached configurations (disabled to save resources)
+memcached:
+  enabled: false
+
+memcachedExporter:
+  enabled: false
+
+# ServiceMonitor disabled
+serviceMonitor:
+  enabled: false
+
+# NetworkPolicy disabled
+networkPolicy:
+  enabled: false
+
+# RBAC
+rbac:
+  create: true
+
+# Service Account
+serviceAccount:
+  create: true
+  
+# Storage class
+storageClass:
+  create: false
+
+# Traces configuration
+traces:
+  otlp:
+    grpc:
+      enabled: true
+      receiverConfig: {}
+    http:
+      enabled: true
+      receiverConfig: {}
+  jaeger:
+    grpc:
+      enabled: true
+      receiverConfig: {}
+    thriftCompact:
+      enabled: true
+      receiverConfig: {}
+    thriftHttp:
+      enabled: true
+      receiverConfig: {}
+  zipkin:
+    enabled: true
+    receiverConfig: {}
+
+# Search configuration
+search:
+  enabled: false
+
+# Enterprise features disabled
+enterprise:
+  enabled: false

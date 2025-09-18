@@ -1,0 +1,186 @@
+# Simplified Mimir Distributed configuration for single node with external Minio
+mimir:
+  structuredConfig:
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: ltgm-minio.default.svc.cluster.local:9000
+          bucket_name: mimir
+          access_key_id: QL62Py3cx8l703E2XPTu
+          secret_access_key: LxHJAiPoncpu0cggl9yDf0ZUAasZyCOLFwBe4yDv
+          insecure: true
+          region: us-east-1
+    
+    # Single-node replication settings
+    ingester:
+      ring:
+        replication_factor: 1
+    
+    store_gateway:
+      sharding_ring:
+        replication_factor: 1
+    
+    compactor:
+      sharding_ring:
+        wait_stability_min_duration: 0s
+    
+    query_scheduler:
+      max_outstanding_requests_per_tenant: 100
+
+# Gateway (nginx)
+gateway:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Distributor
+distributor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+
+# Ingester
+ingester:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistentVolume:
+    enabled: true
+    size: 2Gi
+  autoscaling:
+    enabled: false
+  zoneAwareReplication:
+    enabled: false
+
+# Querier
+querier:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+
+# Query Frontend
+query_frontend:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+
+# Query Scheduler
+query_scheduler:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+
+# Store Gateway
+store_gateway:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  persistentVolume:
+    enabled: true
+    size: 1Gi
+  autoscaling:
+    enabled: false
+  zoneAwareReplication:
+    enabled: false
+
+# Compactor
+compactor:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistentVolume:
+    enabled: true
+    size: 2Gi
+
+# Ruler (disabled)
+ruler:
+  enabled: false
+
+# Alertmanager (disabled)
+alertmanager:
+  enabled: false
+
+# Overrides Exporter
+overrides_exporter:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Disable built-in Minio (we're using external)
+minio:
+  enabled: false
+
+# Disable caches to save resources
+chunks-cache:
+  enabled: false
+index-cache:
+  enabled: false
+metadata-cache:
+  enabled: false
+results-cache:
+  enabled: false
+admin-cache:
+  enabled: false
+
+# Disable enterprise features
+enterprise:
+  enabled: false
+
+# ServiceMonitor disabled
+serviceMonitor:
+  enabled: false

@@ -1,0 +1,222 @@
+# Grafana Alloy Data Collector Configuration
+# FOR: LAB/TESTING - Collects metrics, logs, and traces from Kubernetes
+# PRODUCTION: Review security contexts, TLS settings, and resource limits
+alloy:
+  stabilityLevel: "experimental"    # PRODUCTION: Consider "stable" when available
+  configMap:
+    content: |
+      // Logging configuration
+      logging {
+        level  = "info"
+        format = "logfmt"
+      }
+
+      // Kubernetes service discovery for nodes
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
+
+      // Kubernetes service discovery for pods
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Kubernetes service discovery for services
+      discovery.kubernetes "services" {
+        role = "service"
+      }
+
+      // Kubernetes service discovery for endpoints
+      discovery.kubernetes "endpoints" {
+        role = "endpoints"
+      }
+
+      // Node metrics from kubelet
+      prometheus.scrape "kubelet" {
+        targets    = discovery.kubernetes.nodes.targets
+        forward_to = [prometheus.remote_write.mimir.receiver]
+        
+        scrape_interval = "30s"
+        metrics_path    = "/metrics"
+        scheme          = "https"
+        
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          insecure_skip_verify = true  // PRODUCTION: Use proper TLS verification
+        }
+      }
+
+      // cAdvisor metrics for container stats
+      prometheus.scrape "cadvisor" {
+        targets    = discovery.kubernetes.nodes.targets
+        forward_to = [prometheus.remote_write.mimir.receiver]
+        
+        scrape_interval = "30s"
+        metrics_path    = "/metrics/cadvisor"
+        scheme          = "https"
+        
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          insecure_skip_verify = true
+        }
+      }
+
+      // Kube-state-metrics scraping
+      prometheus.scrape "kube_state_metrics" {
+        targets = [{
+          __address__ = "ltgm-kube-state-metrics.default.svc.cluster.local:8080",
+        }]
+        forward_to = [prometheus.remote_write.mimir.receiver]
+        
+        scrape_interval = "30s"
+        metrics_path    = "/metrics"
+      }
+
+      // Node exporter scraping for system metrics (Docker Desktop compatible)
+      prometheus.scrape "node_exporter" {
+        targets = [{
+          __address__ = "node-exporter.default.svc.cluster.local:9100",
+        }]
+        forward_to = [prometheus.remote_write.mimir.receiver]
+        
+        scrape_interval = "30s"
+        metrics_path    = "/metrics"
+      }
+
+      // Remote write to Mimir
+      prometheus.remote_write "mimir" {
+        endpoint {
+          url = "http://ltgm-mimir-nginx.default.svc.cluster.local/api/v1/push"
+          
+          queue_config {
+            capacity             = 10000
+            max_samples_per_send = 1000
+            batch_send_deadline  = "5s"
+          }
+        }
+      }
+
+      // Loki configuration for logs
+      loki.source.kubernetes "pods" {
+        targets    = discovery.kubernetes.pods.targets
+        forward_to = [loki.write.loki.receiver]
+      }
+
+      // Loki write configuration
+      loki.write "loki" {
+        endpoint {
+          url = "http://ltgm-loki-loki-distributed-gateway.default.svc.cluster.local/loki/api/v1/push"
+        }
+      }
+
+      // OTLP receiver for traces
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      // OTLP exporter to Tempo
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "http://ltgm-tempo-distributor.default.svc.cluster.local:4317"
+          tls {
+            insecure = true
+          }
+        }
+      }
+
+# Deploy as DaemonSet for node-level collection
+controller:
+  type: "daemonset"                 # PRODUCTION: Keep DaemonSet for complete coverage
+  
+  # Resource configuration - LAB/TESTING values
+  resources:
+    requests:
+      cpu: "100m"                   # PRODUCTION: Consider 200m+ for high-traffic clusters
+      memory: "256Mi"               # PRODUCTION: Consider 512Mi+ for large clusters
+    limits:
+      cpu: "500m"                   # PRODUCTION: Scale to 1000m+ based on workload
+      memory: "512Mi"               # PRODUCTION: Scale to 1Gi+ for high-volume metrics
+
+# Service account
+serviceAccount:
+  create: true
+
+# RBAC
+rbac:
+  create: true
+
+# Cluster role
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+      verbs: ["get", "list", "watch"]
+
+# Service configuration
+service:
+  enabled: true
+  type: ClusterIP
+  ports:
+    - name: http-metrics
+      port: 12345
+      targetPort: 12345
+      protocol: TCP
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+
+# Security context
+securityContext:
+  runAsUser: 473
+  runAsGroup: 473
+  runAsNonRoot: true
+  fsGroup: 473
+
+# Pod security context
+podSecurityContext:
+  runAsUser: 473
+  runAsGroup: 473
+  runAsNonRoot: true
+  fsGroup: 473
+
+# Volume mounts for log access
+extraVolumes:
+  - name: varlog
+    hostPath:
+      path: /var/log
+  - name: varlibdockercontainers
+    hostPath:
+      path: /var/lib/docker/containers
+
+extraVolumeMounts:
+  - name: varlog
+    mountPath: /var/log
+    readOnly: true
+  - name: varlibdockercontainers
+    mountPath: /var/lib/docker/containers
+    readOnly: true
+
+# Tolerations to run on all nodes
+tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+    operator: Exists
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+    operator: Exists

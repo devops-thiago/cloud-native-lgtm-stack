@@ -1,0 +1,102 @@
+# Minio S3 Storage Configuration
+# FOR: LAB/TESTING - Single-node development environments
+# PRODUCTION: Change passwords, enable TLS, configure distributed mode
+
+# Authentication - LAB/TESTING credentials
+auth:
+  rootUser: "admin"          # PRODUCTION: Use secure username
+  rootPassword: "password123" # PRODUCTION: Use strong password or secret
+
+# Deployment mode
+mode: standalone              # PRODUCTION: Use 'distributed' for HA
+
+# Resource configuration - LAB/TESTING values
+resources:
+  requests:
+    memory: "128Mi"           # PRODUCTION: Consider 512Mi+ for better performance
+    cpu: "100m"              # PRODUCTION: Consider 250m+ for production workloads
+  limits:
+    memory: "512Mi"           # PRODUCTION: Scale to 2Gi+ based on usage
+    cpu: "500m"              # PRODUCTION: Scale to 1000m+ for production
+
+# Storage configuration
+persistence:
+  enabled: true
+  storageClass: ""            # PRODUCTION: Use specific high-performance storage class
+  size: 5Gi                   # PRODUCTION: Scale based on data retention requirements
+
+# Service configuration  
+service:
+  type: ClusterIP             # PRODUCTION: Keep ClusterIP, use LoadBalancer if needed
+  port: 9000
+  consolePort: 9001
+
+# Console (Web UI) configuration - LAB/TESTING
+consoleService:
+  type: NodePort              # PRODUCTION: Use ClusterIP + Ingress for security
+  port: 9001
+
+# Default buckets to create
+buckets:
+  - name: loki
+    policy: none
+    purge: false
+  - name: tempo
+    policy: none
+    purge: false
+  - name: mimir
+    policy: none
+    purge: false
+
+# Security context
+securityContext:
+  enabled: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+# Pod security context
+podSecurityContext:
+  enabled: true
+  fsGroup: 1001
+
+# Replica count (1 for single node)
+replicaCount: 1
+
+# Node selector for single node deployment
+nodeSelector: {}
+
+# Tolerations for single node
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Health checks
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 1
+  failureThreshold: 3
+
+# Disable distributed mode features for single node
+environment:
+  MINIO_BROWSER_REDIRECT_URL: "http://localhost:9001"
+  MINIO_SERVER_URL: "http://localhost:9000"
+
+# Ingress disabled for simplicity
+ingress:
+  enabled: false
+
+# Metrics
+metrics:
+  serviceMonitor:
+    enabled: false

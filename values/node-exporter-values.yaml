@@ -1,0 +1,98 @@
+# Node Exporter Helm Chart Values
+# FOR: Standard Kubernetes environments (NOT Docker Desktop)
+# USE: When running on cloud providers, bare metal, or standard K8s distributions
+# PRODUCTION: Suitable with security hardening (see comments below)
+
+# Resource configuration - LAB/TESTING values (increase for production)
+resources:
+  requests:
+    cpu: "50m"     # PRODUCTION: Consider 100m for better performance
+    memory: "64Mi" # PRODUCTION: Consider 128Mi for better stability
+  limits:
+    cpu: "200m"    # PRODUCTION: Consider 500m for high-traffic clusters
+    memory: "128Mi" # PRODUCTION: Consider 256Mi for larger clusters
+
+# Service configuration for metric scraping
+service:
+  # Enable Alloy/Prometheus scraping
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+    prometheus.io/path: "/metrics"
+
+# Pod annotations for metric discovery
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9100"
+  prometheus.io/path: "/metrics"
+
+# Host volume mounts with proper mount propagation
+# PRODUCTION: Review and harden these mount points for security
+extraHostVolumeMounts:
+  - name: proc
+    hostPath: /proc
+    mountPath: /host/proc
+    readOnly: true
+    mountPropagation: HostToContainer  # Required for standard K8s
+  - name: sys
+    hostPath: /sys
+    mountPath: /host/sys
+    readOnly: true
+    mountPropagation: HostToContainer  # Required for standard K8s
+  - name: root
+    hostPath: /
+    mountPath: /host/root
+    readOnly: true
+    mountPropagation: HostToContainer  # Required for standard K8s
+
+# Node-exporter arguments
+extraArgs:
+  - --path.procfs=/host/proc
+  - --path.sysfs=/host/sys
+  - --path.rootfs=/host/root
+  # Exclude problematic mount points
+  - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/pods/.+)($|/)
+  # Network interface filtering
+  - --collector.netclass.ignored-devices=^(veth.*|[a-f0-9]{15})$
+  - --collector.netdev.device-exclude=^(veth.*|[a-f0-9]{15})$
+
+# Security context - LAB/TESTING (harden for production)
+securityContext:
+  fsGroup: 65534        # PRODUCTION: Verify this aligns with security policies
+  runAsGroup: 65534     # PRODUCTION: Consider using dedicated security context
+  runAsNonRoot: true
+  runAsUser: 65534      # PRODUCTION: Use specific non-root user
+
+# Host network access required for system metrics
+hostNetwork: true       # PRODUCTION: Required but review network policies
+hostPID: true          # PRODUCTION: Required but review security implications
+
+# Service account configuration
+serviceAccount:
+  create: true          # PRODUCTION: Use existing SA with minimal permissions
+  annotations: {}       # PRODUCTION: Add security annotations as needed
+
+# Update strategy for production environments
+updateStrategy:
+  type: RollingUpdate   # PRODUCTION: Consider OnDelete for more controlled updates
+  rollingUpdate:
+    maxUnavailable: 1   # PRODUCTION: Adjust based on cluster size
+
+# Node selector and tolerations
+# PRODUCTION: Configure to run on specific nodes if needed
+nodeSelector: {}
+tolerations:
+  - operator: Exists    # LAB/TESTING: Runs on all nodes including masters
+                       # PRODUCTION: Restrict to worker nodes only
+
+# Affinity rules - not set for maximum compatibility
+affinity: {}           # PRODUCTION: Consider anti-affinity rules for HA
+
+# Priority class for scheduling
+# PRODUCTION: Set appropriate priority class
+priorityClassName: ""
+
+# Enable RBAC (required for proper operation)
+rbac:
+  create: true         # PRODUCTION: Always true, review permissions
+  pspEnabled: false    # PRODUCTION: Enable if using Pod Security Policies

@@ -1,0 +1,57 @@
+# Kube-state-metrics values for single-node Kubernetes
+# Provides Kubernetes object state metrics for dashboards
+
+# Resource constraints for laptop environments
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "128Mi"
+
+# Replica count for single node
+replicas: 1
+
+# Prometheus annotations for scraping
+prometheusScrape:
+  enabled: true
+
+# Pod annotations to enable Alloy scraping
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+
+# RBAC configuration
+rbac:
+  create: true
+
+# Service account
+serviceAccount:
+  create: true
+
+# Security context
+securityContext:
+  enabled: true
+  runAsUser: 65534
+  runAsGroup: 65534
+  fsGroup: 65534
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
