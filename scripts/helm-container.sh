@@ -57,7 +57,7 @@ run_helm_container() {
     echo -e "${BLUE}🐳 Running Helm in container: ${HELM_IMAGE}${NC}" >&2
     
     # Mount kubeconfig and project directory, run helm command
-    docker run --rm -it \
+    docker run --rm \
         -v "${kubeconfig_path}:/root/.kube/config:ro" \
         -v "${project_root}:/workspace" \
         -w /workspace \

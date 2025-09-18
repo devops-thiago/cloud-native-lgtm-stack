@@ -78,7 +78,7 @@ function Invoke-HelmContainer {
     
     # Mount kubeconfig and project directory, run helm command
     $dockerArgs = @(
-        "run", "--rm", "-it",
+        "run", "--rm",
         "-v", "${kubeconfigPath}:/root/.kube/config:ro",
         "-v", "${projectRoot}:/workspace",
         "-w", "/workspace",
