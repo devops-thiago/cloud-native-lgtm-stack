@@ -10,7 +10,7 @@ param(
 
 # Configuration
 $HELM_IMAGE = "alpine/helm:3.13.2"
-$KUBECTL_IMAGE = "bitnami/kubectl:latest"
+$KUBECTL_IMAGE = "alpine/kubectl:latest"
 
 # Function to write colored output
 function Write-ColorOutput {
@@ -78,7 +78,7 @@ function Invoke-HelmContainer {
     
     # Mount kubeconfig and project directory, run helm command
     $dockerArgs = @(
-        "run", "--rm", "-it",
+        "run", "--rm",
         "-v", "${kubeconfigPath}:/root/.kube/config:ro",
         "-v", "${projectRoot}:/workspace",
         "-w", "/workspace",

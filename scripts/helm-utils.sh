@@ -95,6 +95,16 @@ helm_install_upgrade() {
     
     echo -e "${BLUE}🚀 Installing/upgrading Helm release: $release_name${NC}"
     
+    # For containerized Helm, ensure repositories are available
+    if [ "$HELM_MODE" = "container" ]; then
+        echo -e "${YELLOW}🔄 Ensuring repositories are available for containerized Helm...${NC}"
+        # Re-add repositories as they don't persist between container runs
+        helm_repo_add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
+        helm_repo_add minio https://charts.min.io/ >/dev/null 2>&1 || true
+        helm_repo_add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
+        run_helm repo update >/dev/null 2>&1 || true
+    fi
+    
     if run_helm upgrade --install "$release_name" "$chart" \
         --namespace "$namespace" \
         "${additional_args[@]}"; then

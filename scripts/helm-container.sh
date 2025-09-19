@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 HELM_IMAGE="alpine/helm:3.13.2"
-KUBECTL_IMAGE="bitnami/kubectl:latest"
+KUBECTL_IMAGE="alpine/kubectl:latest"
 
 # Function to check if Docker is available
 check_docker() {
@@ -57,7 +57,7 @@ run_helm_container() {
     echo -e "${BLUE}🐳 Running Helm in container: ${HELM_IMAGE}${NC}" >&2
     
     # Mount kubeconfig and project directory, run helm command
-    docker run --rm -it \
+    docker run --rm \
         -v "${kubeconfig_path}:/root/.kube/config:ro" \
         -v "${project_root}:/workspace" \
         -w /workspace \
