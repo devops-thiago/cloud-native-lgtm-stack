@@ -91,7 +91,7 @@ echo ""
 
 # Wait for Minio to be ready
 echo -e "${YELLOW}⏳ Waiting for Minio to be ready...${NC}"
-kubectl wait --for=condition=ready pod -l release=ltgm-minio -n $NAMESPACE --timeout=300s
+kubectl wait --for=condition=ready pod -l release=${RELEASE_PREFIX}-minio -n $NAMESPACE --timeout=300s
 
 echo -e "${GREEN}✅ Minio is ready${NC}"
 echo ""

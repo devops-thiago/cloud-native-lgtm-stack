@@ -53,7 +53,7 @@ jobs:
     - name: Verify installation
       run: |
         # Wait for pods to be ready
-        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s || true
+        kubectl wait --for=condition=ready pod -l release=test-minio -n lgtm-test --timeout=300s || true
         kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s || true
         
         # Check if all expected releases are installed
@@ -122,7 +122,7 @@ jobs:
     - name: Verify installation
       run: |
         # Wait for pods to be ready
-        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s || true
+        kubectl wait --for=condition=ready pod -l release=test-minio -n lgtm-test --timeout=300s || true
         kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s || true
         
         # Check if all expected releases are installed using containerized helm

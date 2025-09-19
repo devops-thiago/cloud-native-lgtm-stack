@@ -18,12 +18,20 @@ on:
 jobs:
   test-with-local-helm:
     name: Test PowerShell Scripts with Local Helm
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Install PowerShell
+      run: |
+        # Install PowerShell on Ubuntu
+        wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell
 
     - name: Install kubectl
       uses: azure/setup-kubectl@v3
@@ -37,7 +45,10 @@ jobs:
 
     - name: Install kind
       run: |
-        choco install kind
+        # Install kind for Ubuntu
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
         kind version
 
     - name: Create kind cluster
@@ -63,7 +74,7 @@ jobs:
       shell: pwsh
       run: |
         # Wait for pods to be ready
-        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s
+        kubectl wait --for=condition=ready pod -l release=test-minio -n lgtm-test --timeout=300s
         kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s
         
         # Check if all expected releases are installed
@@ -98,12 +109,20 @@ jobs:
 
   test-with-containerized-helm:
     name: Test PowerShell Scripts with Containerized Helm
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Install PowerShell
+      run: |
+        # Install PowerShell on Ubuntu
+        wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell
 
     - name: Install kubectl
       uses: azure/setup-kubectl@v3
@@ -112,7 +131,10 @@ jobs:
 
     - name: Install kind
       run: |
-        choco install kind
+        # Install kind for Ubuntu
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
         kind version
 
     - name: Create kind cluster
@@ -140,7 +162,7 @@ jobs:
       shell: pwsh
       run: |
         # Wait for pods to be ready
-        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=minio -n lgtm-test --timeout=300s
+        kubectl wait --for=condition=ready pod -l release=test-minio -n lgtm-test --timeout=300s
         kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n lgtm-test --timeout=300s
         
         # Check if all expected releases are installed using containerized helm
