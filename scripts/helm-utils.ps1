@@ -142,6 +142,20 @@ function Install-HelmRelease {
     
     Write-ColorOutput "🚀 Installing/upgrading Helm release: $ReleaseName" "Blue"
     
+    # For containerized Helm, ensure repositories are available
+    if ($Global:HELM_MODE -eq "container") {
+        Write-ColorOutput "🔄 Ensuring repositories are available for containerized Helm..." "Yellow"
+        # Re-add repositories as they don't persist between container runs
+        try {
+            Add-HelmRepo "grafana" "https://grafana.github.io/helm-charts" 2>$null | Out-Null
+            Add-HelmRepo "minio" "https://charts.min.io/" 2>$null | Out-Null
+            Add-HelmRepo "prometheus-community" "https://prometheus-community.github.io/helm-charts" 2>$null | Out-Null
+            Update-HelmRepo 2>$null | Out-Null
+        } catch {
+            # Ignore repo add errors - charts might still work with existing repos
+        }
+    }
+    
     $args = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace) + $AdditionalArgs
     
     try {
