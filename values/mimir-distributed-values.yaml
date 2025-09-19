@@ -7,8 +7,8 @@ mimir:
         s3:
           endpoint: ltgm-minio.default.svc.cluster.local:9000
           bucket_name: mimir
-          access_key_id: QL62Py3cx8l703E2XPTu
-          secret_access_key: LxHJAiPoncpu0cggl9yDf0ZUAasZyCOLFwBe4yDv
+          access_key_id: admin
+          secret_access_key: password123
           insecure: true
           region: us-east-1
     

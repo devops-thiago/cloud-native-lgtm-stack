@@ -29,7 +29,7 @@ loki:
       ruler: loki
       admin: loki
     s3:
-      endpoint: minio.default.svc.cluster.local:9000
+      endpoint: ltgm-minio.default.svc.cluster.local:9000
       region: us-east-1
       accessKeyId: admin
       secretAccessKey: password123
@@ -50,7 +50,7 @@ loki:
   # Storage configuration for indexes
   storageConfig:
     aws:
-      s3: s3://admin:password123@minio.default.svc.cluster.local:9000/loki
+      s3: s3://admin:password123@ltgm-minio.default.svc.cluster.local:9000/loki
       s3forcepathstyle: true
     boltdb_shipper:
       shared_store: aws

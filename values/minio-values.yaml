@@ -7,6 +7,26 @@ auth:
   rootUser: "admin"          # PRODUCTION: Use secure username
   rootPassword: "password123" # PRODUCTION: Use strong password or secret
 
+# Users configuration - create specific non-root user for LGTM components
+users:
+  - accessKey: admin
+    secretKey: password123
+    policy: readwrite
+
+# Policies for the user
+policies:
+  - name: readwrite
+    statements:
+      - resources:
+          - 'arn:aws:s3:::loki'
+          - 'arn:aws:s3:::loki/*'
+          - 'arn:aws:s3:::tempo'
+          - 'arn:aws:s3:::tempo/*'
+          - 'arn:aws:s3:::mimir'
+          - 'arn:aws:s3:::mimir/*'
+        actions:
+          - 's3:*'
+
 # Deployment mode
 mode: standalone              # PRODUCTION: Use 'distributed' for HA
 
@@ -87,7 +107,7 @@ readinessProbe:
   timeoutSeconds: 1
   failureThreshold: 3
 
-# Disable distributed mode features for single node
+# Environment variables for single node setup
 environment:
   MINIO_BROWSER_REDIRECT_URL: "http://localhost:9001"
   MINIO_SERVER_URL: "http://localhost:9000"
