@@ -157,6 +157,32 @@ if (-not (Install-HelmRelease "${ReleasePrefix}-grafana" "grafana/grafana" $Name
 Write-ColorOutput "✅ Grafana deployed successfully" "Green"
 Write-Host ""
 
+# Deploy custom Grafana dashboards
+Write-ColorOutput "📊 Deploying custom Grafana dashboards..." "Yellow"
+$dashboardsConfigPath = Join-Path $projectRoot "values/kubernetes-dashboards-configmap.yaml"
+
+try {
+    kubectl apply -f $dashboardsConfigPath -n $Namespace
+    if ($LASTEXITCODE -eq 0) {
+        Write-ColorOutput "✅ Custom dashboards ConfigMap deployed successfully" "Green"
+    }
+    else {
+        Write-ColorOutput "❌ Failed to deploy custom dashboards ConfigMap" "Red"
+        exit 1
+    }
+}
+catch {
+    Write-ColorOutput "❌ Failed to deploy custom dashboards ConfigMap" "Red"
+    exit 1
+}
+
+# Wait a moment for the sidecar to pick up the dashboards
+Write-ColorOutput "⏳ Waiting for dashboard sidecar to process dashboards..." "Yellow"
+Start-Sleep -Seconds 10
+
+Write-ColorOutput "✅ Custom dashboards configured successfully" "Green"
+Write-Host ""
+
 # Deploy Alloy (Grafana Agent)
 Write-ColorOutput "🤖 Deploying Alloy (Grafana Agent)..." "Yellow"
 $alloyValuesPath = Join-Path $projectRoot "values/alloy-values.yaml"

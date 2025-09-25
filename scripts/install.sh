@@ -132,6 +132,22 @@ helm_install_upgrade "${RELEASE_PREFIX}-grafana" "grafana/grafana" "$NAMESPACE" 
 echo -e "${GREEN}✅ Grafana deployed successfully${NC}"
 echo ""
 
+# Deploy custom Grafana dashboards
+echo -e "${YELLOW}📊 Deploying custom Grafana dashboards...${NC}"
+if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n $NAMESPACE; then
+    echo -e "${GREEN}✅ Custom dashboards ConfigMap deployed successfully${NC}"
+else
+    echo -e "${RED}❌ Failed to deploy custom dashboards ConfigMap${NC}"
+    exit 1
+fi
+
+# Wait a moment for the sidecar to pick up the dashboards
+echo -e "${YELLOW}⏳ Waiting for dashboard sidecar to process dashboards...${NC}"
+sleep 10
+
+echo -e "${GREEN}✅ Custom dashboards configured successfully${NC}"
+echo ""
+
 # Deploy Alloy (Grafana Agent)
 echo -e "${YELLOW}🤖 Deploying Alloy (Grafana Agent)...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-alloy" "grafana/alloy" "$NAMESPACE" \

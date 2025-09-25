@@ -122,9 +122,20 @@ try {
         $confirmation = Read-Host "Do you want to delete these PVCs? This will permanently delete all data! [y/N]"
         if ($confirmation -match '^[Yy]$') {
             $pvcList | ForEach-Object {
-                kubectl delete pvc $_ -n $Namespace 2>$null
+                if ($_) {
+                    Write-Host "Deleting PVC: $_"
+                    try {
+                        kubectl delete pvc $_ -n $Namespace --ignore-not-found=true 2>$null
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Host "  Warning: Could not delete PVC $_"
+                        }
+                    }
+                    catch {
+                        Write-Host "  Warning: Could not delete PVC $_"
+                    }
+                }
             }
-            Write-ColorOutput "✅ PVCs deleted" "Green"
+            Write-ColorOutput "✅ PVC deletion completed" "Green"
         }
         else {
             Write-ColorOutput "⚠️  PVCs left intact" "Yellow"
@@ -202,6 +213,7 @@ Write-Host "  ✅ Loki uninstalled"
 Write-Host "  ✅ Node Exporter uninstalled"
 Write-Host "  ✅ Kube-state-metrics uninstalled"
 Write-Host "  ✅ Minio uninstalled"
+Write-Host "  ✅ Custom dashboard ConfigMaps removed"
 Write-Host ""
 Write-ColorOutput "🛠️  Manual cleanup (if needed):" "Yellow"
 Write-Host "  # Remove any remaining resources"

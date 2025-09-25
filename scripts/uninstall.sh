@@ -83,6 +83,12 @@ kubectl delete -f ../values/node-exporter-docker-desktop-daemonset.yaml --ignore
 echo -e "${GREEN}✅ Custom node-exporter cleaned up${NC}"
 echo ""
 
+# Clean up custom dashboard ConfigMaps
+echo -e "${YELLOW}🧹 Cleaning up custom dashboard ConfigMaps...${NC}"
+kubectl delete configmap grafana-custom-dashboards -n $NAMESPACE --ignore-not-found=true
+echo -e "${GREEN}✅ Custom dashboard ConfigMaps cleaned up${NC}"
+echo ""
+
 # Clean up PVCs if they exist
 echo -e "${YELLOW}🧹 Cleaning up Persistent Volume Claims...${NC}"
 
@@ -95,8 +101,13 @@ if [ -n "$PVCs" ]; then
     read -p "Do you want to delete these PVCs? This will permanently delete all data! [y/N]: " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "$PVCs" | xargs kubectl delete pvc -n $NAMESPACE
-        echo -e "${GREEN}✅ PVCs deleted${NC}"
+        echo "$PVCs" | while read -r pvc; do
+            if [ -n "$pvc" ]; then
+                echo "Deleting PVC: $pvc"
+                kubectl delete pvc "$pvc" -n $NAMESPACE --ignore-not-found=true || echo "  Warning: Could not delete PVC $pvc"
+            fi
+        done
+        echo -e "${GREEN}✅ PVC deletion completed${NC}"
     else
         echo -e "${YELLOW}⚠️  PVCs left intact${NC}"
     fi
@@ -151,6 +162,7 @@ echo "  ✅ Loki uninstalled"
 echo "  ✅ Node Exporter uninstalled"
 echo "  ✅ Kube-state-metrics uninstalled"
 echo "  ✅ Minio uninstalled"
+echo "  ✅ Custom dashboard ConfigMaps removed"
 echo ""
 echo -e "${YELLOW}🛠️  Manual cleanup (if needed):${NC}"
 echo "  # Remove any remaining resources"

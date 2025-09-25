@@ -402,22 +402,7 @@ If Kubernetes dashboards show no data:
    kubectl logs -l app.kubernetes.io/name=grafana -c grafana-sc-dashboard -n default
    ```
 
-3. **Update dashboards**:
-
-   **Linux/macOS/WSL (Bash):**
-   ```bash
-   cd scripts
-   ./update-grafana-dashboards.sh
-   ```
-
-   **Any Platform (PowerShell 7+):**
-   ```powershell
-   cd scripts
-   ./update-grafana-dashboards.ps1     # Linux/macOS
-   .\update-grafana-dashboards.ps1     # Windows
-   ```
-
-4. **Check metric availability in Grafana**:
+3. **Check metric availability in Grafana**:
    - Go to Explore → Mimir datasource
    - Try queries like: `kube_pod_info`, `container_cpu_usage_seconds_total`, `node_memory_MemTotal_bytes`
 
@@ -487,8 +472,6 @@ cloud-native-lgtm-stack/
 │   ├── install.ps1                                 # PowerShell 7+: Cross-platform installation
 │   ├── uninstall.sh                               # Bash: Complete cleanup
 │   ├── uninstall.ps1                              # PowerShell 7+: Cross-platform cleanup
-│   ├── update-grafana-dashboards.sh               # Bash: Dashboard updates
-│   ├── update-grafana-dashboards.ps1              # PowerShell 7+: Cross-platform dashboard updates
 │   ├── helm-container.sh                          # Bash: Containerized Helm wrapper
 │   ├── helm-container.ps1                         # PowerShell 7+: Cross-platform Helm wrapper
 │   ├── helm-utils.sh                              # Bash: Helm detection utilities
