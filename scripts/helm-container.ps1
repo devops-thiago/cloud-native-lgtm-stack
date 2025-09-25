@@ -50,7 +50,12 @@ function Get-KubeconfigPath {
     if ($env:KUBECONFIG) {
         return $env:KUBECONFIG
     }
-    elseif (Test-Path "$env:USERPROFILE\.kube\config") {
+    # Check Linux/Unix path first
+    elseif (Test-Path "$env:HOME/.kube/config") {
+        return "$env:HOME/.kube/config"
+    }
+    # Check Windows path as fallback
+    elseif ($env:USERPROFILE -and (Test-Path "$env:USERPROFILE\.kube\config")) {
         return "$env:USERPROFILE\.kube\config"
     }
     else {
@@ -66,26 +71,40 @@ function Invoke-HelmContainer {
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$HelmArgs
     )
-    
+
     $kubeconfigPath = Get-KubeconfigPath
     $projectRoot = Split-Path $PSScriptRoot -Parent
-    
+
     Write-ColorOutput "🐳 Running Helm in container: $HELM_IMAGE" "Blue"
-    
+
     # Convert Windows paths to Linux paths for Docker
     $kubeconfigLinux = $kubeconfigPath -replace '\\', '/' -replace '^([A-Za-z]):', '/mnt/$1'
     $workspaceLinux = $projectRoot -replace '\\', '/' -replace '^([A-Za-z]):', '/mnt/$1'
-    
+
     # Mount kubeconfig and project directory, run helm command
+    # Add Docker Desktop network compatibility and persistent Helm cache
+    # Use Linux cache path if on Linux, Windows path otherwise
+    if ($env:HOME) {
+        $helmCacheDir = "$env:HOME/.cache/helm-container"
+    } else {
+        $helmCacheDir = "$env:USERPROFILE\.cache\helm-container"
+    }
+    if (-not (Test-Path $helmCacheDir)) {
+        New-Item -Path $helmCacheDir -ItemType Directory -Force | Out-Null
+    }
+
     $dockerArgs = @(
         "run", "--rm", "-it",
-        "-v", "${kubeconfigPath}:/root/.kube/config:ro",
+        "-v", "${kubeconfigPath}:/tmp/kubeconfig:ro",
         "-v", "${projectRoot}:/workspace",
-        "-w", "/workspace",
-        "--network", "host",
+        "-v", "${helmCacheDir}:/root/.cache/helm",
+        "-v", "${helmCacheDir}:/root/.config/helm",
+        "-w", "/workspace/scripts",
+        "-e", "KUBECONFIG=/tmp/kubeconfig",
+        "--add-host", "kubernetes.docker.internal:host-gateway",
         $HELM_IMAGE
     ) + $HelmArgs
-    
+
     & docker @dockerArgs
 }
 
@@ -95,18 +114,19 @@ function Invoke-KubectlContainer {
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$KubectlArgs
     )
-    
+
     $kubeconfigPath = Get-KubeconfigPath
-    
+
     Write-ColorOutput "🐳 Running kubectl in container: $KUBECTL_IMAGE" "Blue"
-    
+
     $dockerArgs = @(
         "run", "--rm",
-        "-v", "${kubeconfigPath}:/root/.kube/config:ro",
-        "--network", "host",
+        "-v", "${kubeconfigPath}:/tmp/kubeconfig:ro",
+        "-e", "KUBECONFIG=/tmp/kubeconfig",
+        "--add-host", "kubernetes.docker.internal:host-gateway",
         $KUBECTL_IMAGE
     ) + $KubectlArgs
-    
+
     & docker @dockerArgs
 }
 
@@ -133,13 +153,13 @@ function Test-ClusterConnection {
 # Function to pull required images
 function Get-ContainerImages {
     Write-ColorOutput "📦 Pulling required container images..." "Yellow"
-    
+
     Write-ColorOutput "Pulling Helm image: $HELM_IMAGE" "Blue"
     docker pull $HELM_IMAGE
-    
+
     Write-ColorOutput "Pulling kubectl image: $KUBECTL_IMAGE" "Blue"
     docker pull $KUBECTL_IMAGE
-    
+
     Write-ColorOutput "✅ Container images ready" "Green"
 }
 
@@ -167,13 +187,13 @@ function Main {
     if (-not (Test-Docker)) {
         exit 1
     }
-    
+
     # If no arguments provided, show help
     if ($Arguments.Count -eq 0) {
         Show-Help
         exit 0
     }
-    
+
     # Handle special commands
     switch ($Arguments[0]) {
         "--test-connection" {
@@ -204,7 +224,7 @@ function Main {
                 Write-ColorOutput "💡 Please check your kubeconfig and cluster status" "Yellow"
                 exit 1
             }
-            
+
             # Run Helm command in container
             Invoke-HelmContainer @Arguments
             exit $LASTEXITCODE

@@ -35,11 +35,11 @@ alloy:
       prometheus.scrape "kubelet" {
         targets    = discovery.kubernetes.nodes.targets
         forward_to = [prometheus.remote_write.mimir.receiver]
-        
+
         scrape_interval = "30s"
         metrics_path    = "/metrics"
         scheme          = "https"
-        
+
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           insecure_skip_verify = true  // PRODUCTION: Use proper TLS verification
@@ -50,11 +50,11 @@ alloy:
       prometheus.scrape "cadvisor" {
         targets    = discovery.kubernetes.nodes.targets
         forward_to = [prometheus.remote_write.mimir.receiver]
-        
+
         scrape_interval = "30s"
         metrics_path    = "/metrics/cadvisor"
         scheme          = "https"
-        
+
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           insecure_skip_verify = true
@@ -67,7 +67,7 @@ alloy:
           __address__ = "ltgm-kube-state-metrics.default.svc.cluster.local:8080",
         }]
         forward_to = [prometheus.remote_write.mimir.receiver]
-        
+
         scrape_interval = "30s"
         metrics_path    = "/metrics"
       }
@@ -78,7 +78,7 @@ alloy:
           __address__ = "node-exporter.default.svc.cluster.local:9100",
         }]
         forward_to = [prometheus.remote_write.mimir.receiver]
-        
+
         scrape_interval = "30s"
         metrics_path    = "/metrics"
       }
@@ -87,7 +87,7 @@ alloy:
       prometheus.remote_write "mimir" {
         endpoint {
           url = "http://ltgm-mimir-nginx.default.svc.cluster.local/api/v1/push"
-          
+
           queue_config {
             capacity             = 10000
             max_samples_per_send = 1000
@@ -114,11 +114,11 @@ alloy:
         grpc {
           endpoint = "0.0.0.0:4317"
         }
-        
+
         http {
           endpoint = "0.0.0.0:4318"
         }
-        
+
         output {
           traces = [otelcol.exporter.otlp.tempo.input]
         }
@@ -137,7 +137,7 @@ alloy:
 # Deploy as DaemonSet for node-level collection
 controller:
   type: "daemonset"                 # PRODUCTION: Keep DaemonSet for complete coverage
-  
+
   # Resource configuration - LAB/TESTING values
   resources:
     requests:

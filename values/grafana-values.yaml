@@ -39,7 +39,7 @@ datasources:
         editable: true
         jsonData:
           maxLines: 1000
-      
+
       # Tempo datasource
       - name: Tempo
         type: tempo
@@ -62,7 +62,7 @@ datasources:
           spanBar:
             type: Tag
             tag: http.status_code
-      
+
       # Mimir (Prometheus) datasource
       - name: Mimir
         type: prometheus
@@ -97,19 +97,19 @@ dashboards:
       gnetId: 13407
       revision: 1
       datasource: Loki
-    
+
     # Tempo dashboard
     tempo-dashboard:
       gnetId: 16795
       revision: 2
       datasource: Tempo
-    
+
     # Node Exporter dashboard
     node-exporter-dashboard:
       gnetId: 1860
       revision: 29
       datasource: Mimir
-    
+
     # Note: Custom Kubernetes dashboards will be loaded via sidecar from ConfigMap
     # Custom dashboards: kubernetes-cluster-overview, kubernetes-pod-resources, container-usage
 
@@ -119,31 +119,31 @@ grafana.ini:
     domain: localhost
     root_url: http://localhost:32000
     serve_from_sub_path: false
-  
+
 # Security settings - LAB/TESTING
   security:
     admin_user: $__env{GF_SECURITY_ADMIN_USER}        # PRODUCTION: Use proper auth (LDAP/OAuth)
     admin_password: $__env{GF_SECURITY_ADMIN_PASSWORD} # PRODUCTION: Use secrets, not env vars
     allow_embedding: true                              # PRODUCTION: Disable for security
-  
+
   # Users settings
   users:
     allow_sign_up: false
     auto_assign_org: true
     auto_assign_org_role: Viewer
-  
+
   # Auth settings
   auth.anonymous:
     enabled: false
-  
+
   # Explore settings
   explore:
     enabled: true
-  
+
   # Alerting disabled for resource saving
   alerting:
     enabled: false
-  
+
   # Unified alerting disabled
   unified_alerting:
     enabled: false

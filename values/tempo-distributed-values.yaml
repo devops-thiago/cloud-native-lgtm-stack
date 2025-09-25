@@ -11,7 +11,7 @@ global:
 tempo:
   # Disable multitenancy
   multitenancy_enabled: false
-  
+
   # Storage configuration using Minio S3
   storage:
     trace:
@@ -22,23 +22,23 @@ tempo:
         access_key: admin
         secret_key: password123
         insecure: true
-  
+
   # Single-node replication settings
   ingester:
     lifecycler:
       ring:
         replication_factor: 1
-        
+
   # Retention configuration
   retention: 24h
-  
+
   # Global overrides
   global_overrides:
     max_traces_per_user: 50000
     ingestion_rate_strategy: global
     ingestion_burst_size_bytes: 20000000
     ingestion_rate_limit_bytes: 15000000
-  
+
   # Compactor configuration
   compactor:
     compaction:
@@ -46,7 +46,7 @@ tempo:
       max_compaction_objects: 1000000
       block_retention: 24h
       compacted_block_retention: 10m
-  
+
   # Metrics generator disabled to save resources
   metrics_generator:
     enabled: false
@@ -195,7 +195,7 @@ rbac:
 # Service Account
 serviceAccount:
   create: true
-  
+
 # Storage class
 storageClass:
   create: false

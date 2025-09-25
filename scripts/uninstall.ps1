@@ -77,7 +77,7 @@ function Remove-HelmRelease {
         [string]$ReleaseName,
         [string]$ComponentName
     )
-    
+
     if ($Global:HELM_MODE -ne "none") {
         Write-ColorOutput "🗑️  Uninstalling $ComponentName..." "Yellow"
         Uninstall-HelmRelease $ReleaseName $Namespace
@@ -110,15 +110,15 @@ Write-Host ""
 Write-ColorOutput "🧹 Cleaning up Persistent Volume Claims..." "Yellow"
 
 try {
-    $pvcList = kubectl get pvc -n $Namespace --no-headers 2>$null | Where-Object { 
+    $pvcList = kubectl get pvc -n $Namespace --no-headers 2>$null | Where-Object {
         $_ -match "$ReleasePrefix"
     } | ForEach-Object { ($_ -split '\s+')[0] }
-    
+
     if ($pvcList) {
         Write-Host "Found PVCs to clean up:"
         $pvcList | ForEach-Object { Write-Host "  $_" }
         Write-Host ""
-        
+
         $confirmation = Read-Host "Do you want to delete these PVCs? This will permanently delete all data! [y/N]"
         if ($confirmation -match '^[Yy]$') {
             $pvcList | ForEach-Object {
@@ -143,16 +143,16 @@ Write-Host ""
 Write-ColorOutput "🔍 Checking for remaining resources..." "Yellow"
 
 try {
-    $remainingPods = (kubectl get pods -n $Namespace --no-headers 2>$null | Where-Object { 
-        $_ -match "($ReleasePrefix|loki|tempo|mimir|grafana|minio|alloy)" 
+    $remainingPods = (kubectl get pods -n $Namespace --no-headers 2>$null | Where-Object {
+        $_ -match "($ReleasePrefix|loki|tempo|mimir|grafana|minio|alloy)"
     }).Count
-    
-    $remainingServices = (kubectl get svc -n $Namespace --no-headers 2>$null | Where-Object { 
-        $_ -match "($ReleasePrefix|loki|tempo|mimir|grafana|minio|alloy)" 
+
+    $remainingServices = (kubectl get svc -n $Namespace --no-headers 2>$null | Where-Object {
+        $_ -match "($ReleasePrefix|loki|tempo|mimir|grafana|minio|alloy)"
     }).Count
-    
-    $remainingSecrets = (kubectl get secrets -n $Namespace --no-headers 2>$null | Where-Object { 
-        $_ -match "($ReleasePrefix|loki|tempo|mimir|grafana|minio|alloy)" 
+
+    $remainingSecrets = (kubectl get secrets -n $Namespace --no-headers 2>$null | Where-Object {
+        $_ -match "($ReleasePrefix|loki|tempo|mimir|grafana|minio|alloy)"
     }).Count
 }
 catch {
@@ -199,6 +199,8 @@ Write-Host "  ✅ Grafana uninstalled"
 Write-Host "  ✅ Mimir uninstalled"
 Write-Host "  ✅ Tempo uninstalled"
 Write-Host "  ✅ Loki uninstalled"
+Write-Host "  ✅ Node Exporter uninstalled"
+Write-Host "  ✅ Kube-state-metrics uninstalled"
 Write-Host "  ✅ Minio uninstalled"
 Write-Host ""
 Write-ColorOutput "🛠️  Manual cleanup (if needed):" "Yellow"

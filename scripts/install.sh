@@ -14,10 +14,12 @@ NC='\033[0m' # No Color
 # Configuration
 NAMESPACE=${NAMESPACE:-default}
 RELEASE_PREFIX=${RELEASE_PREFIX:-ltgm}
+HELM_TIMEOUT=${HELM_TIMEOUT:-10m}
 
 echo -e "${GREEN}🚀 Starting Cloud Native LGTM Stack Installation${NC}"
 echo "Namespace: $NAMESPACE"
 echo "Release Prefix: $RELEASE_PREFIX"
+echo "Helm Timeout: $HELM_TIMEOUT"
 echo ""
 
 # Import Helm utilities
@@ -82,7 +84,7 @@ echo ""
 echo -e "${YELLOW}🪣 Deploying Minio...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-minio" "minio/minio" "$NAMESPACE" \
     --values ../values/minio-values.yaml \
-    --wait --timeout=10m
+    --wait --timeout=$HELM_TIMEOUT
 
 echo -e "${GREEN}✅ Minio deployed successfully${NC}"
 echo ""
@@ -98,7 +100,7 @@ echo ""
 echo -e "${YELLOW}📊 Deploying Loki...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-loki" "grafana/loki-distributed" "$NAMESPACE" \
     --values ../values/loki-distributed-values.yaml \
-    --wait --timeout=15m
+    --wait --timeout=$HELM_TIMEOUT
 
 echo -e "${GREEN}✅ Loki deployed successfully${NC}"
 echo ""
@@ -107,7 +109,7 @@ echo ""
 echo -e "${YELLOW}🔍 Deploying Tempo...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-tempo" "grafana/tempo-distributed" "$NAMESPACE" \
     --values ../values/tempo-distributed-values.yaml \
-    --wait --timeout=15m
+    --wait --timeout=$HELM_TIMEOUT
 
 echo -e "${GREEN}✅ Tempo deployed successfully${NC}"
 echo ""
@@ -116,7 +118,7 @@ echo ""
 echo -e "${YELLOW}📊 Deploying Mimir...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-mimir" "grafana/mimir-distributed" "$NAMESPACE" \
     --values ../values/mimir-distributed-values.yaml \
-    --wait --timeout=15m
+    --wait --timeout=$HELM_TIMEOUT
 
 echo -e "${GREEN}✅ Mimir deployed successfully${NC}"
 echo ""
@@ -125,7 +127,7 @@ echo ""
 echo -e "${YELLOW}📈 Deploying Grafana...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-grafana" "grafana/grafana" "$NAMESPACE" \
     --values ../values/grafana-values.yaml \
-    --wait --timeout=10m
+    --wait --timeout=$HELM_TIMEOUT
 
 echo -e "${GREEN}✅ Grafana deployed successfully${NC}"
 echo ""
@@ -134,7 +136,7 @@ echo ""
 echo -e "${YELLOW}🤖 Deploying Alloy (Grafana Agent)...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-alloy" "grafana/alloy" "$NAMESPACE" \
     --values ../values/alloy-values.yaml \
-    --wait --timeout=10m
+    --wait --timeout=$HELM_TIMEOUT
 
 echo -e "${GREEN}✅ Alloy deployed successfully${NC}"
 echo ""
@@ -143,7 +145,7 @@ echo ""
 echo -e "${YELLOW}📊 Deploying kube-state-metrics...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-kube-state-metrics" "prometheus-community/kube-state-metrics" "$NAMESPACE" \
     --values ../values/kube-state-metrics-values.yaml \
-    --wait --timeout=10m
+    --wait --timeout=$HELM_TIMEOUT
 
 echo -e "${GREEN}✅ Kube-state-metrics deployed successfully${NC}"
 echo ""
@@ -151,16 +153,16 @@ echo ""
 # Deploy Node Exporter with environment detection
 echo -e "${YELLOW}📊 Deploying node-exporter...${NC}"
 
-# Detect if running on Docker Desktop
-if kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}' | grep -q docker-desktop; then
-    echo -e "${YELLOW}🐳 Docker Desktop detected - using custom DaemonSet deployment${NC}"
+# Detect if running on Docker Desktop (mount propagation issues)
+if kubectl get nodes -o jsonpath='{.items[0].metadata.name}' | grep -q docker-desktop; then
+    echo -e "${YELLOW}🐳 Docker Desktop detected - using custom DaemonSet (mount propagation compatibility)${NC}"
     kubectl apply -f ../values/node-exporter-docker-desktop-daemonset.yaml
     kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=node-exporter -n $NAMESPACE --timeout=120s
 else
-    echo -e "${YELLOW}⚙️  Standard Kubernetes detected - using Helm chart deployment${NC}"
+    echo -e "${YELLOW}⚙️  Standard Kubernetes detected - using Helm chart${NC}"
     helm_install_upgrade "${RELEASE_PREFIX}-node-exporter" "prometheus-community/prometheus-node-exporter" "$NAMESPACE" \
         --values ../values/node-exporter-values.yaml \
-        --wait --timeout=10m
+        --wait --timeout=$HELM_TIMEOUT
 fi
 
 echo -e "${GREEN}✅ Node-exporter deployed successfully${NC}"

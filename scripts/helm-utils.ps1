@@ -88,7 +88,7 @@ function Add-HelmRepo {
 
     $maxRetries = 3
     $retryCount = 0
-    
+
     while ($retryCount -lt $maxRetries) {
         try {
             Invoke-Helm "repo", "add", $RepoName, $RepoUrl
@@ -100,12 +100,12 @@ function Add-HelmRepo {
         catch {
             # Continue to retry logic
         }
-        
+
         $retryCount++
         Write-ColorOutput "⚠️  Retry $retryCount/$maxRetries for repository: $RepoName" "Yellow"
         Start-Sleep -Seconds 2
     }
-    
+
     Write-ColorOutput "❌ Failed to add repository after $maxRetries attempts: $RepoName" "Red"
     return $false
 }
@@ -139,11 +139,11 @@ function Install-HelmRelease {
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$AdditionalArgs
     )
-    
+
     Write-ColorOutput "🚀 Installing/upgrading Helm release: $ReleaseName" "Blue"
-    
+
     $args = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace) + $AdditionalArgs
-    
+
     try {
         Invoke-Helm @args
         if ($LASTEXITCODE -eq 0) {
@@ -169,7 +169,7 @@ function Uninstall-HelmRelease {
         [Parameter(Mandatory = $true)]
         [string]$Namespace
     )
-    
+
     # Check if release exists
     try {
         Invoke-Helm "status", $ReleaseName, "-n", $Namespace 2>$null | Out-Null
