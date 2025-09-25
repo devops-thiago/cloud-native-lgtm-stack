@@ -13,14 +13,14 @@ global:
 loki:
   # Disable authentication for simplicity
   auth_enabled: false
-  
+
   # Common configuration
   commonConfig:
     replication_factor: 1
     ring:
       kvstore:
         store: inmemory
-  
+
   # Storage configuration using Minio S3
   storage:
     type: s3
@@ -35,7 +35,7 @@ loki:
       secretAccessKey: password123
       s3ForcePathStyle: true
       insecure: true
-  
+
   # Schema configuration
   schemaConfig:
     configs:
@@ -46,7 +46,7 @@ loki:
         index:
           prefix: index_
           period: 24h
-  
+
   # Storage configuration for indexes
   storageConfig:
     aws:
@@ -56,7 +56,7 @@ loki:
       shared_store: aws
       active_index_directory: /var/loki/boltdb-shipper-active
       cache_location: /var/loki/boltdb-shipper-cache
-  
+
   # Limits configuration
   limits_config:
     enforce_metric_name: false

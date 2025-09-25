@@ -45,7 +45,7 @@ persistence:
   storageClass: ""            # PRODUCTION: Use specific high-performance storage class
   size: 5Gi                   # PRODUCTION: Scale based on data retention requirements
 
-# Service configuration  
+# Service configuration
 service:
   type: ClusterIP             # PRODUCTION: Keep ClusterIP, use LoadBalancer if needed
   port: 9000

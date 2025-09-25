@@ -50,18 +50,27 @@ get_kubeconfig_path() {
 run_helm_container() {
     local kubeconfig_path
     kubeconfig_path=$(get_kubeconfig_path)
-    
+
     local project_root
     project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-    
+
     echo -e "${BLUE}🐳 Running Helm in container: ${HELM_IMAGE}${NC}" >&2
-    
+
     # Mount kubeconfig and project directory, run helm command
+    # Add Docker Desktop network compatibility for kubernetes.docker.internal
+    # Use /tmp/kubeconfig to avoid permission issues with /root/.kube/config
+    # Mount a persistent Helm cache directory to preserve repository configuration
+    local helm_cache_dir="${HOME}/.cache/helm-container"
+    mkdir -p "${helm_cache_dir}"
+
     docker run --rm -it \
-        -v "${kubeconfig_path}:/root/.kube/config:ro" \
+        -v "${kubeconfig_path}:/tmp/kubeconfig:ro" \
         -v "${project_root}:/workspace" \
-        -w /workspace \
-        --network host \
+        -v "${helm_cache_dir}:/root/.cache/helm" \
+        -v "${helm_cache_dir}:/root/.config/helm" \
+        -w /workspace/scripts \
+        -e KUBECONFIG=/tmp/kubeconfig \
+        --add-host kubernetes.docker.internal:host-gateway \
         "${HELM_IMAGE}" \
         "$@"
 }
@@ -70,12 +79,13 @@ run_helm_container() {
 run_kubectl_container() {
     local kubeconfig_path
     kubeconfig_path=$(get_kubeconfig_path)
-    
+
     echo -e "${BLUE}🐳 Running kubectl in container: ${KUBECTL_IMAGE}${NC}" >&2
-    
+
     docker run --rm \
-        -v "${kubeconfig_path}:/root/.kube/config:ro" \
-        --network host \
+        -v "${kubeconfig_path}:/tmp/kubeconfig:ro" \
+        -e KUBECONFIG=/tmp/kubeconfig \
+        --add-host kubernetes.docker.internal:host-gateway \
         "${KUBECTL_IMAGE}" \
         "$@"
 }
@@ -95,13 +105,13 @@ test_cluster_connection() {
 # Function to pull required images
 pull_images() {
     echo -e "${YELLOW}📦 Pulling required container images...${NC}"
-    
+
     echo -e "${BLUE}Pulling Helm image: ${HELM_IMAGE}${NC}"
     docker pull "${HELM_IMAGE}"
-    
+
     echo -e "${BLUE}Pulling kubectl image: ${KUBECTL_IMAGE}${NC}"
     docker pull "${KUBECTL_IMAGE}"
-    
+
     echo -e "${GREEN}✅ Container images ready${NC}"
 }
 
@@ -111,7 +121,7 @@ main() {
     if ! check_docker; then
         exit 1
     fi
-    
+
     # If no arguments provided, show help
     if [ $# -eq 0 ]; then
         echo -e "${YELLOW}🐳 Containerized Helm Wrapper${NC}"
@@ -130,7 +140,7 @@ main() {
         echo "  $0 --kubectl [args...]  # Run kubectl in container"
         exit 0
     fi
-    
+
     # Handle special commands
     case "${1:-}" in
         --test-connection)
@@ -151,14 +161,14 @@ main() {
             exit 0
             ;;
     esac
-    
+
     # Test cluster connection first
     if ! test_cluster_connection; then
         echo -e "${RED}❌ Cluster connectivity test failed${NC}" >&2
         echo -e "${YELLOW}💡 Please check your kubeconfig and cluster status${NC}" >&2
         exit 1
     fi
-    
+
     # Run Helm command in container
     run_helm_container "$@"
 }

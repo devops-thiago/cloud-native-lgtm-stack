@@ -28,33 +28,11 @@ podAnnotations:
 
 # Host volume mounts with proper mount propagation
 # PRODUCTION: Review and harden these mount points for security
-extraHostVolumeMounts:
-  - name: proc
-    hostPath: /proc
-    mountPath: /host/proc
-    readOnly: true
-    mountPropagation: HostToContainer  # Required for standard K8s
-  - name: sys
-    hostPath: /sys
-    mountPath: /host/sys
-    readOnly: true
-    mountPropagation: HostToContainer  # Required for standard K8s
-  - name: root
-    hostPath: /
-    mountPath: /host/root
-    readOnly: true
-    mountPropagation: HostToContainer  # Required for standard K8s
+# NOTE: The default Helm chart already provides proc, sys, and root mounts
+# Only add additional mounts here if needed for specific environments
+extraHostVolumeMounts: []
 
 # Node-exporter arguments
-extraArgs:
-  - --path.procfs=/host/proc
-  - --path.sysfs=/host/sys
-  - --path.rootfs=/host/root
-  # Exclude problematic mount points
-  - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/pods/.+)($|/)
-  # Network interface filtering
-  - --collector.netclass.ignored-devices=^(veth.*|[a-f0-9]{15})$
-  - --collector.netdev.device-exclude=^(veth.*|[a-f0-9]{15})$
 
 # Security context - LAB/TESTING (harden for production)
 securityContext:

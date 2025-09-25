@@ -52,7 +52,7 @@ try {
         "--namespace", $Namespace,
         "--wait"
     )
-    
+
     & helm @helmArgs
     if ($LASTEXITCODE -eq 0) {
         Write-ColorOutput "✅ Grafana upgraded successfully" "Green"
@@ -100,7 +100,7 @@ catch {
 try {
     $nodePort = kubectl get service "${ReleasePrefix}-grafana" -n $Namespace -o jsonpath='{.spec.ports[0].nodePort}' 2>$null
     $nodeIP = kubectl get nodes -n $Namespace -o jsonpath='{.items[0].status.addresses[0].address}' 2>$null
-    
+
     if (-not $nodeIP) {
         $nodeIP = "localhost"
     }

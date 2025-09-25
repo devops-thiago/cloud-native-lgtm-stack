@@ -35,7 +35,7 @@ spec:
         - --collector.netdev.device-exclude=^(veth.*|[a-f0-9]{15})$
         # Disable problematic collectors for Docker Desktop
         - --no-collector.hwmon
-        - --no-collector.thermal_zone  
+        - --no-collector.thermal_zone
         - --no-collector.powersupplyclass
         - --no-collector.wifi
         - --no-collector.systemd

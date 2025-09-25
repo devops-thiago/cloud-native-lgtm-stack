@@ -57,7 +57,7 @@ echo ""
 uninstall_release() {
     local release_name=$1
     local component_name=$2
-    
+
     if [ "$HELM_MODE" != "none" ]; then
         echo -e "${YELLOW}🗑️  Uninstalling $component_name...${NC}"
         helm_uninstall "$release_name" "$NAMESPACE"
@@ -77,7 +77,7 @@ uninstall_release "${RELEASE_PREFIX}-kube-state-metrics" "Kube-state-metrics"
 uninstall_release "${RELEASE_PREFIX}-node-exporter" "Node Exporter (Helm)"
 uninstall_release "${RELEASE_PREFIX}-minio" "Minio"
 
-# Clean up custom node-exporter DaemonSet if it exists
+# Clean up custom node-exporter DaemonSet if it exists (Docker Desktop)
 echo -e "${YELLOW}🧹 Cleaning up custom node-exporter DaemonSet...${NC}"
 kubectl delete -f ../values/node-exporter-docker-desktop-daemonset.yaml --ignore-not-found=true
 echo -e "${GREEN}✅ Custom node-exporter cleaned up${NC}"
@@ -146,8 +146,10 @@ echo -e "${YELLOW}📋 Cleanup Summary:${NC}"
 echo "  ✅ Alloy uninstalled"
 echo "  ✅ Grafana uninstalled"
 echo "  ✅ Mimir uninstalled"
-echo "  ✅ Tempo uninstalled" 
+echo "  ✅ Tempo uninstalled"
 echo "  ✅ Loki uninstalled"
+echo "  ✅ Node Exporter uninstalled"
+echo "  ✅ Kube-state-metrics uninstalled"
 echo "  ✅ Minio uninstalled"
 echo ""
 echo -e "${YELLOW}🛠️  Manual cleanup (if needed):${NC}"

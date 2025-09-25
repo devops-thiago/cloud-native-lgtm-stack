@@ -3,7 +3,8 @@
 
 param(
     [string]$Namespace = $env:NAMESPACE ?? "default",
-    [string]$ReleasePrefix = $env:RELEASE_PREFIX ?? "ltgm"
+    [string]$ReleasePrefix = $env:RELEASE_PREFIX ?? "ltgm",
+    [string]$HelmTimeout = $env:HELM_TIMEOUT ?? "10m"
 )
 
 # Import Helm utilities
@@ -37,6 +38,7 @@ function Test-Command {
 Write-ColorOutput "🚀 Starting Cloud Native LGTM Stack Installation" "Green"
 Write-Host "Namespace: $Namespace"
 Write-Host "Release Prefix: $ReleasePrefix"
+Write-Host "Helm Timeout: $HelmTimeout"
 Write-Host ""
 
 # Check prerequisites
@@ -101,7 +103,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 # Deploy Minio first (storage backend)
 Write-ColorOutput "🪣 Deploying Minio..." "Yellow"
 $minioValuesPath = Join-Path $projectRoot "values/minio-values.yaml"
-if (-not (Install-HelmRelease "${ReleasePrefix}-minio" "minio/minio" $Namespace "--values" $minioValuesPath "--wait" "--timeout=10m")) {
+if (-not (Install-HelmRelease "${ReleasePrefix}-minio" "minio/minio" $Namespace "--values" $minioValuesPath "--wait" "--timeout=$HelmTimeout")) {
     exit 1
 }
 
@@ -118,7 +120,7 @@ Write-Host ""
 # Deploy Loki
 Write-ColorOutput "📊 Deploying Loki..." "Yellow"
 $lokiValuesPath = Join-Path $projectRoot "values/loki-distributed-values.yaml"
-if (-not (Install-HelmRelease "${ReleasePrefix}-loki" "grafana/loki-distributed" $Namespace "--values" $lokiValuesPath "--wait" "--timeout=15m")) {
+if (-not (Install-HelmRelease "${ReleasePrefix}-loki" "grafana/loki-distributed" $Namespace "--values" $lokiValuesPath "--wait" "--timeout=$HelmTimeout")) {
     exit 1
 }
 
@@ -128,7 +130,7 @@ Write-Host ""
 # Deploy Tempo
 Write-ColorOutput "🔍 Deploying Tempo..." "Yellow"
 $tempoValuesPath = Join-Path $projectRoot "values/tempo-distributed-values.yaml"
-if (-not (Install-HelmRelease "${ReleasePrefix}-tempo" "grafana/tempo-distributed" $Namespace "--values" $tempoValuesPath "--wait" "--timeout=15m")) {
+if (-not (Install-HelmRelease "${ReleasePrefix}-tempo" "grafana/tempo-distributed" $Namespace "--values" $tempoValuesPath "--wait" "--timeout=$HelmTimeout")) {
     exit 1
 }
 
@@ -138,7 +140,7 @@ Write-Host ""
 # Deploy Mimir
 Write-ColorOutput "📊 Deploying Mimir..." "Yellow"
 $mimirValuesPath = Join-Path $projectRoot "values/mimir-distributed-values.yaml"
-if (-not (Install-HelmRelease "${ReleasePrefix}-mimir" "grafana/mimir-distributed" $Namespace "--values" $mimirValuesPath "--wait" "--timeout=15m")) {
+if (-not (Install-HelmRelease "${ReleasePrefix}-mimir" "grafana/mimir-distributed" $Namespace "--values" $mimirValuesPath "--wait" "--timeout=$HelmTimeout")) {
     exit 1
 }
 
@@ -148,7 +150,7 @@ Write-Host ""
 # Deploy Grafana
 Write-ColorOutput "📈 Deploying Grafana..." "Yellow"
 $grafanaValuesPath = Join-Path $projectRoot "values/grafana-values.yaml"
-if (-not (Install-HelmRelease "${ReleasePrefix}-grafana" "grafana/grafana" $Namespace "--values" $grafanaValuesPath "--wait" "--timeout=10m")) {
+if (-not (Install-HelmRelease "${ReleasePrefix}-grafana" "grafana/grafana" $Namespace "--values" $grafanaValuesPath "--wait" "--timeout=$HelmTimeout")) {
     exit 1
 }
 
@@ -158,7 +160,7 @@ Write-Host ""
 # Deploy Alloy (Grafana Agent)
 Write-ColorOutput "🤖 Deploying Alloy (Grafana Agent)..." "Yellow"
 $alloyValuesPath = Join-Path $projectRoot "values/alloy-values.yaml"
-if (-not (Install-HelmRelease "${ReleasePrefix}-alloy" "grafana/alloy" $Namespace "--values" $alloyValuesPath "--wait" "--timeout=10m")) {
+if (-not (Install-HelmRelease "${ReleasePrefix}-alloy" "grafana/alloy" $Namespace "--values" $alloyValuesPath "--wait" "--timeout=$HelmTimeout")) {
     exit 1
 }
 
@@ -168,7 +170,7 @@ Write-Host ""
 # Deploy Kube-state-metrics
 Write-ColorOutput "📊 Deploying kube-state-metrics..." "Yellow"
 $kubeStateMetricsValuesPath = Join-Path $projectRoot "values/kube-state-metrics-values.yaml"
-if (-not (Install-HelmRelease "${ReleasePrefix}-kube-state-metrics" "prometheus-community/kube-state-metrics" $Namespace "--values" $kubeStateMetricsValuesPath "--wait" "--timeout=10m")) {
+if (-not (Install-HelmRelease "${ReleasePrefix}-kube-state-metrics" "prometheus-community/kube-state-metrics" $Namespace "--values" $kubeStateMetricsValuesPath "--wait" "--timeout=$HelmTimeout")) {
     exit 1
 }
 
@@ -178,18 +180,18 @@ Write-Host ""
 # Deploy Node Exporter with environment detection
 Write-ColorOutput "📊 Deploying node-exporter..." "Yellow"
 
-# Detect if running on Docker Desktop
-$nodeInfo = kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}' 2>$null
-if ($nodeInfo -match "docker-desktop") {
-    Write-ColorOutput "🐳 Docker Desktop detected - using custom DaemonSet deployment" "Yellow"
+# Detect if running on Docker Desktop (mount propagation issues)
+$nodeName = kubectl get nodes -o jsonpath='{.items[0].metadata.name}' 2>$null
+if ($nodeName -match "docker-desktop") {
+    Write-ColorOutput "🐳 Docker Desktop detected - using custom DaemonSet (mount propagation compatibility)" "Yellow"
     $nodeExporterDaemonSetPath = Join-Path $projectRoot "values/node-exporter-docker-desktop-daemonset.yaml"
     kubectl apply -f $nodeExporterDaemonSetPath
     kubectl wait --for=condition=ready pod -l "app.kubernetes.io/name=node-exporter" -n $Namespace --timeout=120s
 }
 else {
-    Write-ColorOutput "⚙️  Standard Kubernetes detected - using Helm chart deployment" "Yellow"
+    Write-ColorOutput "⚙️  Standard Kubernetes detected - using Helm chart" "Yellow"
     $nodeExporterValuesPath = Join-Path $projectRoot "values/node-exporter-values.yaml"
-    if (-not (Install-HelmRelease "${ReleasePrefix}-node-exporter" "prometheus-community/prometheus-node-exporter" $Namespace "--values" $nodeExporterValuesPath "--wait" "--timeout=10m")) {
+    if (-not (Install-HelmRelease "${ReleasePrefix}-node-exporter" "prometheus-community/prometheus-node-exporter" $Namespace "--values" $nodeExporterValuesPath "--wait" "--timeout=$HelmTimeout")) {
         exit 1
     }
 }

@@ -16,6 +16,8 @@ A complete, lightweight, cloud-native observability stack optimized for single-n
 
 Perfect for learning, experimentation, and understanding how modern observability works in cloud-native environments.
 
+> **✅ Cross-Platform Validated**: All PowerShell scripts have been tested and verified to work on both Linux (Ubuntu with PowerShell 7.5+) and Windows environments, ensuring consistent functionality across platforms.
+
 ## 🏗️ Architecture
 
 **LGTM Stack Components:**
@@ -60,10 +62,13 @@ Perfect for learning, experimentation, and understanding how modern observabilit
 ## 🎯 Features
 
 - **Complete Observability**: Full metrics, logs, and traces collection and storage
-- **Cross-Platform Support**: Both Bash (Linux/macOS) and PowerShell (Windows) scripts included
-- **Environment Adaptive**: Auto-detects Docker Desktop vs standard Kubernetes
+- **Cross-Platform Support**:
+  - **Bash scripts**: Linux, macOS, WSL
+  - **PowerShell 7+ scripts**: Windows, Linux, macOS (identical functionality)
+  - **Docker Desktop Compatible**: Auto-detects and handles mount propagation issues
+- **Environment Adaptive**: Auto-detects Docker Desktop vs standard Kubernetes for optimal node-exporter deployment
 - **Resource Optimized**: LAB/TESTING configurations with production guidance in comments
-- **Single Node Ready**: Optimized for Minikube, Kind, Docker Desktop environments  
+- **Single Node Ready**: Optimized for Minikube, Kind, Docker Desktop environments
 - **Integrated Storage**: Uses Minio as unified S3-compatible storage backend
 - **Unified Collection**: Alloy collects all telemetry data from Kubernetes clusters
 - **Pre-configured**: Grafana comes with all datasources and custom Kubernetes dashboards
@@ -74,9 +79,22 @@ Perfect for learning, experimentation, and understanding how modern observabilit
 
 ## 📋 Prerequisites
 
+### Core Requirements
 - **Kubernetes Cluster**: Minikube, Kind, Docker Desktop K8s, or similar
 - **kubectl**: Kubernetes command-line tool
 - **Helm 3.x OR Docker**: Package manager for Kubernetes OR Docker for containerized Helm
+
+### Platform-Specific Requirements
+
+**Linux/macOS**:
+- Bash shell (built-in)
+- All scripts work natively
+
+**Windows**:
+- **PowerShell 7.0+** (required for cross-platform compatibility)
+- Download from: https://github.com/PowerShell/PowerShell/releases
+- **Note**: Windows PowerShell 5.1 is NOT supported - use PowerShell 7+
+- All scripts tested on PowerShell 7.5+ on both Windows and Linux
 
 ### 🔄 Flexible Helm Requirements
 
@@ -108,23 +126,26 @@ The installation script automatically detects your environment:
 ### 1. Clone and Navigate
 
 ```bash
-git clone <repository-url>
-cd cloud-native-ltgm-stack
+git clone https://github.com/devops-thiago/cloud-native-lgtm-stack
+cd cloud-native-lgtm-stack
 ```
 
 ### 2. Install the Stack
 
-**Linux/macOS (Bash):**
+**Linux/macOS/WSL (Bash):**
 ```bash
 cd scripts
 ./install.sh
 ```
 
-**Windows (PowerShell):**
+**Windows/Linux/macOS (PowerShell 7+):**
 ```powershell
 cd scripts
-.\install.ps1
+./install.ps1        # Linux/macOS
+.\install.ps1       # Windows
 ```
+
+**Note**: PowerShell scripts work on all platforms with PowerShell 7+
 
 ### 3. Access Applications
 
@@ -168,18 +189,25 @@ Each component is configured with minimal resource requests suitable for develop
 
 You can customize the deployment using environment variables:
 
-**Linux/macOS (Bash):**
+- **NAMESPACE**: Target Kubernetes namespace (default: `default`)
+- **RELEASE_PREFIX**: Prefix for all Helm releases (default: `ltgm`)
+- **HELM_TIMEOUT**: Timeout for Helm install/upgrade operations (default: `10m`)
+
+**Linux/macOS/WSL (Bash):**
 ```bash
 export NAMESPACE=observability    # Default: default
 export RELEASE_PREFIX=my-ltgm     # Default: ltgm
+export HELM_TIMEOUT=15m           # Default: 10m
 ./scripts/install.sh
 ```
 
-**Windows (PowerShell):**
+**Any Platform (PowerShell 7+):**
 ```powershell
 $env:NAMESPACE = "observability"    # Default: default
 $env:RELEASE_PREFIX = "my-ltgm"     # Default: ltgm
-.\scripts\install.ps1
+$env:HELM_TIMEOUT = "15m"           # Default: 10m
+./install.ps1        # Linux/macOS
+.\install.ps1       # Windows
 ```
 
 ### Custom Values
@@ -225,7 +253,7 @@ helm install ltgm-node-exporter prometheus-community/prometheus-node-exporter \
 
 If you need to run Helm commands manually without local installation:
 
-**Linux/macOS (Bash):**
+**Linux/macOS/WSL (Bash):**
 ```bash
 # Use the containerized Helm wrapper
 ./scripts/helm-container.sh version
@@ -242,21 +270,21 @@ If you need to run Helm commands manually without local installation:
 ./scripts/helm-container.sh --kubectl get nodes
 ```
 
-**Windows (PowerShell):**
+**Any Platform (PowerShell 7+):**
 ```powershell
-# Use the containerized Helm wrapper
-.\scripts\helm-container.ps1 version
-.\scripts\helm-container.ps1 repo list
-.\scripts\helm-container.ps1 list -A
+# Use the containerized Helm wrapper (works on Windows/Linux/macOS)
+./scripts/helm-container.ps1 version           # Linux/macOS
+.\scripts\helm-container.ps1 version           # Windows
 
 # Test cluster connectivity
-.\scripts\helm-container.ps1 --test-connection
+./scripts/helm-container.ps1 --test-connection  # Linux/macOS
+.\scripts\helm-container.ps1 --test-connection  # Windows
 
 # Pre-pull container images
-.\scripts\helm-container.ps1 --pull-images
+./scripts/helm-container.ps1 --pull-images
 
 # Run kubectl in container
-.\scripts\helm-container.ps1 --kubectl get nodes
+./scripts/helm-container.ps1 --kubectl get nodes
 ```
 
 **Benefits of Containerized Helm:**
@@ -274,7 +302,7 @@ Using Promtail (or any log shipper):
 
 ```yaml
 clients:
-  - url: http://loki.default.svc.cluster.local:3100/loki/api/v1/push
+  - url: http://ltgm-loki-loki-distributed-gateway.default.svc.cluster.local:80/loki/api/v1/push
 ```
 
 ### Sending Traces to Tempo
@@ -284,7 +312,7 @@ Using OpenTelemetry:
 ```yaml
 exporters:
   otlp:
-    endpoint: http://tempo.default.svc.cluster.local:4317
+    endpoint: http://ltgm-tempo-distributor.default.svc.cluster.local:4317
     tls:
       insecure: true
 ```
@@ -294,8 +322,10 @@ Using Jaeger:
 ```yaml
 jaeger:
   collector:
-    endpoint: http://tempo.default.svc.cluster.local:14268/api/traces
+    endpoint: http://ltgm-tempo-distributor.default.svc.cluster.local:14268/api/traces
 ```
+
+**Note**: Service names follow the pattern `{release-prefix}-{component}-{service-type}`. Adjust according to your `RELEASE_PREFIX` (default: `ltgm`).
 
 ### Querying in Grafana
 
@@ -311,7 +341,7 @@ Alloy automatically collects:
 - **Cluster State**: Pod, service, deployment state from kube-state-metrics
 - **System Metrics**: CPU, memory, disk, network from node-exporter
 - **Application Metrics**: From pods with `prometheus.io/scrape: "true"` annotation
-- **System Logs**: From all Kubernetes pods and containers  
+- **System Logs**: From all Kubernetes pods and containers
 - **Traces**: Via OTLP endpoints (4317/4318)
 
 ## 🔍 Troubleshooting
@@ -371,17 +401,18 @@ If Kubernetes dashboards show no data:
    ```
 
 3. **Update dashboards**:
-   
-   **Linux/macOS (Bash):**
+
+   **Linux/macOS/WSL (Bash):**
    ```bash
    cd scripts
    ./update-grafana-dashboards.sh
    ```
-   
-   **Windows (PowerShell):**
+
+   **Any Platform (PowerShell 7+):**
    ```powershell
    cd scripts
-   .\update-grafana-dashboards.ps1
+   ./update-grafana-dashboards.ps1     # Linux/macOS
+   .\update-grafana-dashboards.ps1     # Windows
    ```
 
 4. **Check metric availability in Grafana**:
@@ -399,16 +430,18 @@ If you encounter problems with containerized Helm:
    ```
 
 2. **Test containerized Helm directly**:
-   
-   **Linux/macOS (Bash):**
+
+   **Linux/macOS/WSL (Bash):**
    ```bash
    ./scripts/helm-container.sh --test-connection
    ./scripts/helm-container.sh version
    ```
-   
-   **Windows (PowerShell):**
+
+   **Any Platform (PowerShell 7+):**
    ```powershell
-   .\scripts\helm-container.ps1 --test-connection
+   ./scripts/helm-container.ps1 --test-connection  # Linux/macOS
+   .\scripts\helm-container.ps1 --test-connection  # Windows
+   ./scripts/helm-container.ps1 version
    .\scripts\helm-container.ps1 version
    ```
 
@@ -419,21 +452,22 @@ If you encounter problems with containerized Helm:
    ```
 
 4. **Check kubeconfig access**:
-   
-   **Linux/macOS (Bash):**
+
+   **Linux/macOS/WSL (Bash):**
    ```bash
    ./scripts/helm-container.sh --kubectl cluster-info
    ```
-   
-   **Windows (PowerShell):**
+
+   **Any Platform (PowerShell 7+):**
    ```powershell
-   .\scripts\helm-container.ps1 --kubectl cluster-info
+   ./scripts/helm-container.ps1 --kubectl cluster-info   # Linux/macOS
+   .\scripts\helm-container.ps1 --kubectl cluster-info   # Windows
    ```
 
 ## 📁 Project Structure
 
 ```
-cloud-native-ltgm-stack/
+cloud-native-lgtm-stack/
 ├── README.md
 ├── values/
 │   ├── minio-values.yaml                           # Minio S3 storage
@@ -447,16 +481,16 @@ cloud-native-ltgm-stack/
 │   ├── node-exporter-values.yaml                   # Node-exporter (Helm chart)
 │   └── node-exporter-docker-desktop-daemonset.yaml # Node-exporter (Docker Desktop)
 ├── scripts/
-│   ├── install.sh                                  # Smart installation (local/containerized Helm)
-│   ├── install.ps1                                 # PowerShell version for Windows
-│   ├── uninstall.sh                               # Complete cleanup
-│   ├── uninstall.ps1                              # PowerShell version for Windows
-│   ├── update-grafana-dashboards.sh               # Dashboard updates
-│   ├── update-grafana-dashboards.ps1              # PowerShell version for Windows
-│   ├── helm-container.sh                          # Containerized Helm wrapper
-│   ├── helm-container.ps1                         # PowerShell version for Windows
-│   ├── helm-utils.sh                              # Helm detection utilities
-│   └── helm-utils.ps1                             # PowerShell version for Windows
+│   ├── install.sh                                  # Bash: Linux/macOS/WSL installation
+│   ├── install.ps1                                 # PowerShell 7+: Cross-platform installation
+│   ├── uninstall.sh                               # Bash: Complete cleanup
+│   ├── uninstall.ps1                              # PowerShell 7+: Cross-platform cleanup
+│   ├── update-grafana-dashboards.sh               # Bash: Dashboard updates
+│   ├── update-grafana-dashboards.ps1              # PowerShell 7+: Cross-platform dashboard updates
+│   ├── helm-container.sh                          # Bash: Containerized Helm wrapper
+│   ├── helm-container.ps1                         # PowerShell 7+: Cross-platform Helm wrapper
+│   ├── helm-utils.sh                              # Bash: Helm detection utilities
+│   └── helm-utils.ps1                             # PowerShell 7+: Cross-platform Helm utilities
 └── docs/                                           # Additional documentation
 ```
 
@@ -464,21 +498,22 @@ cloud-native-ltgm-stack/
 
 To completely remove the stack:
 
-**Linux/macOS (Bash):**
+**Linux/macOS/WSL (Bash):**
 ```bash
 cd scripts
 ./uninstall.sh
 ```
 
-**Windows (PowerShell):**
+**Any Platform (PowerShell 7+):**
 ```powershell
 cd scripts
-.\uninstall.ps1
+./uninstall.ps1        # Linux/macOS
+.\uninstall.ps1       # Windows
 ```
 
 This will:
 1. Uninstall all Helm releases
-2. Optionally remove persistent volume claims  
+2. Optionally remove persistent volume claims
 3. Optionally remove the namespace
 
 ## 🔒 Production Deployment Guide
@@ -504,7 +539,7 @@ insecure_skip_verify = true      // PRODUCTION: Use proper TLS verification
 
 **Security & Authentication**:
 - [ ] Change all default passwords (Grafana, Minio)
-- [ ] Enable TLS/SSL for all component communications  
+- [ ] Enable TLS/SSL for all component communications
 - [ ] Configure proper authentication (LDAP/OAuth for Grafana)
 - [ ] Use Kubernetes secrets instead of plain text passwords
 - [ ] Enable proper TLS certificate verification

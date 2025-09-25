@@ -57,7 +57,7 @@ helm_repo_add() {
     local repo_url="$2"
     local max_retries=3
     local retry_count=0
-    
+
     while [ $retry_count -lt $max_retries ]; do
         if run_helm repo add "$repo_name" "$repo_url"; then
             echo -e "${GREEN}✅ Added Helm repository: $repo_name${NC}"
@@ -68,7 +68,7 @@ helm_repo_add() {
             sleep 2
         fi
     done
-    
+
     echo -e "${RED}❌ Failed to add repository after $max_retries attempts: $repo_name${NC}" >&2
     return 1
 }
@@ -92,9 +92,9 @@ helm_install_upgrade() {
     local namespace="$3"
     shift 3  # Remove the first 3 arguments
     local additional_args=("$@")
-    
+
     echo -e "${BLUE}🚀 Installing/upgrading Helm release: $release_name${NC}"
-    
+
     if run_helm upgrade --install "$release_name" "$chart" \
         --namespace "$namespace" \
         "${additional_args[@]}"; then
@@ -110,7 +110,7 @@ helm_install_upgrade() {
 helm_uninstall() {
     local release_name="$1"
     local namespace="$2"
-    
+
     if run_helm status "$release_name" -n "$namespace" >/dev/null 2>&1; then
         echo -e "${YELLOW}🗑️  Uninstalling Helm release: $release_name${NC}"
         if run_helm uninstall "$release_name" -n "$namespace"; then
