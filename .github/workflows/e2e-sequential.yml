@@ -7,66 +7,20 @@ on:
     branches: [ main ]
 
 jobs:
-  e2e-tests-single-cluster:
+  validation:
+    name: "Script Validation & Linting"
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
 
     steps:
     - name: "Checkout Repository"
       uses: actions/checkout@v4
-
-    - name: "Create kind cluster config"
-      run: |
-        cat > kind-config.yaml << EOF
-        kind: Cluster
-        apiVersion: kind.x-k8s.io/v1alpha4
-        nodes:
-        - role: control-plane
-          extraPortMappings:
-          - containerPort: 30080
-            hostPort: 3000
-            protocol: TCP
-          - containerPort: 30081
-            hostPort: 9090
-            protocol: TCP
-          - containerPort: 30082
-            hostPort: 3100
-            protocol: TCP
-          - containerPort: 30083
-            hostPort: 3200
-            protocol: TCP
-        EOF
-
-    - name: "Setup Kubernetes (kind)"
-      uses: helm/kind-action@v1.10.0
-      with:
-        cluster_name: lgtm-e2e-cluster
-        config: kind-config.yaml
-
-    - name: "Install Required Tools"
-      run: |
-        echo "Installing required tools..."
-
-        # Install Helm
-        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-        # Add Helm repositories
-        helm repo add grafana https://grafana.github.io/helm-charts
-        helm repo add minio https://charts.min.io/
-        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-        helm repo update
-
-        # Verify tools
-        kubectl version --client
-        helm version
-        docker --version
 
     - name: "Make Scripts Executable"
       run: |
         cd scripts
         chmod +x *.sh
 
-    # Validation Steps
     - name: "Script Validation - Shell Script Syntax Check"
       run: |
         echo "Validating shell script syntax..."
@@ -111,130 +65,228 @@ jobs:
         $scripts = @('install.ps1', 'uninstall.ps1', 'helm-utils.ps1', 'helm-container.ps1')
         foreach ($script in $scripts) {
             Write-Host "Analyzing ${script}..."
-            $results = Invoke-ScriptAnalyzer -Path $script -Severity Warning,Error
-            if ($results) {
-                Write-Host "Issues found in ${script}:" -ForegroundColor Yellow
-                $results | Format-Table -AutoSize
+            $errorResults = Invoke-ScriptAnalyzer -Path $script -Severity Error
+            $warningResults = Invoke-ScriptAnalyzer -Path $script -Severity Warning
+            if ($errorResults) {
+                Write-Host "Errors found in ${script}:" -ForegroundColor Red
+                $errorResults | Format-Table -AutoSize
+                exit 1
+            } elseif ($warningResults) {
+                Write-Host "Warnings found in ${script} (non-blocking):" -ForegroundColor Yellow
+                $warningResults | Format-Table -AutoSize
             } else {
                 Write-Host "No issues found in ${script}" -ForegroundColor Green
             }
         }
         Write-Host "PSScriptAnalyzer linting completed"
 
-    # Test 1: Shell Scripts with Local Helm (Dry-Run)
-    - name: "Test 1 - Shell Scripts + Local Helm - Dry-Run Validation"
+    - name: "YAML Validation"
       run: |
-        echo "Starting Test 1: Shell Scripts with Local Helm (Dry-Run)"
+        echo "Validating YAML files..."
+        cd values
+        python3 -c "import yaml; yaml.safe_load(open('kubernetes-dashboards-configmap.yaml'))"
+        echo "YAML validation completed successfully"
+
+  local-helm-tests:
+    name: "Local Helm Tests (Dry-Run)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validation
+
+    steps:
+    - name: "Checkout Repository"
+      uses: actions/checkout@v4
+
+    - name: "Create kind cluster config"
+      run: |
+        cat > kind-config.yaml << EOF
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          extraPortMappings:
+          - containerPort: 30080
+            hostPort: 3000
+            protocol: TCP
+          - containerPort: 30081
+            hostPort: 9090
+            protocol: TCP
+          - containerPort: 30082
+            hostPort: 3100
+            protocol: TCP
+          - containerPort: 30083
+            hostPort: 3200
+            protocol: TCP
+        EOF
+
+    - name: "Setup Kubernetes (kind)"
+      uses: helm/kind-action@v1.10.0
+      with:
+        cluster_name: lgtm-local-helm-cluster
+        config: kind-config.yaml
+
+    - name: "Install Helm and Required Tools"
+      run: |
+        echo "Installing required tools..."
+
+        # Install Helm
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+        # Add Helm repositories
+        helm repo add grafana https://grafana.github.io/helm-charts
+        helm repo add minio https://charts.min.io/
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo update
+
+        # Verify tools
+        kubectl version --client
+        helm version
+        docker --version
+
+    - name: "Make Scripts Executable"
+      run: |
         cd scripts
-        export NAMESPACE=lgtm-test-1
-        export RELEASE_PREFIX=test1
+        chmod +x *.sh
+
+    - name: "Test - Shell Scripts + Local Helm - Dry-Run Validation"
+      run: |
+        echo "Starting Shell Scripts with Local Helm (Dry-Run)"
+        cd scripts
+        export NAMESPACE=lgtm-test-shell
+        export RELEASE_PREFIX=shell-test
         export DRY_RUN=true
         ./install.sh
 
-    - name: "Test 1 - Shell Scripts + Local Helm - Verify Dry-Run Success"
+    - name: "Test - PowerShell Scripts + Local Helm - Dry-Run Validation"
+      shell: pwsh
       run: |
-        echo "Verifying Test 1 dry-run completed successfully..."
-        echo "Dry-run validation completed - no actual resources were created"
-        # Verify no resources were actually created
-        if kubectl get namespace lgtm-test-1 2>/dev/null; then
-          echo "WARNING: Namespace lgtm-test-1 exists after dry-run (this might be expected)"
+        Write-Host "Starting PowerShell Scripts with Local Helm (Dry-Run)"
+        cd scripts
+        .\install.ps1 -Namespace "lgtm-test-ps" -ReleasePrefix "ps-test" -DryRun
+
+    - name: "Local Helm Tests Summary"
+      run: |
+        echo "========================================"
+        echo "     LOCAL HELM TESTS COMPLETED"
+        echo "========================================"
+        echo ""
+        echo "Tests completed successfully:"
+        echo "- Shell Scripts + Local Helm (Dry-Run)"
+        echo "- PowerShell Scripts + Local Helm (Dry-Run)"
+        echo ""
+        echo "All dry-run validations passed!"
+
+  containerized-helm-tests:
+    name: "Containerized Helm Tests (Dry-Run)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: validation
+
+    steps:
+    - name: "Checkout Repository"
+      uses: actions/checkout@v4
+
+    - name: "Create kind cluster config"
+      run: |
+        cat > kind-config.yaml << EOF
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        nodes:
+        - role: control-plane
+          extraPortMappings:
+          - containerPort: 30080
+            hostPort: 3000
+            protocol: TCP
+          - containerPort: 30081
+            hostPort: 9090
+            protocol: TCP
+          - containerPort: 30082
+            hostPort: 3100
+            protocol: TCP
+          - containerPort: 30083
+            hostPort: 3200
+            protocol: TCP
+        EOF
+
+    - name: "Setup Kubernetes (kind)"
+      uses: helm/kind-action@v1.10.0
+      with:
+        cluster_name: lgtm-containerized-helm-cluster
+        config: kind-config.yaml
+
+    - name: "Setup Docker and kubectl (No Helm Installation)"
+      run: |
+        echo "Setting up environment for containerized Helm tests..."
+
+        # Verify tools (no Helm installation)
+        kubectl version --client
+        docker --version
+
+        # Ensure no local Helm is available
+        which helm && echo "ERROR: Local Helm found, removing..." && sudo rm -f $(which helm) || echo "Good: No local Helm found"
+
+    - name: "Make Scripts Executable"
+      run: |
+        cd scripts
+        chmod +x *.sh
+
+    - name: "Test - Shell Scripts + Containerized Helm - Dry-Run Validation"
+      run: |
+        echo "Starting Shell Scripts with Containerized Helm (Dry-Run)"
+        cd scripts
+        export NAMESPACE=lgtm-test-shell-container
+        export RELEASE_PREFIX=shell-container-test
+        export DRY_RUN=true
+        ./install.sh
+
+    - name: "Test - PowerShell Scripts + Containerized Helm - Dry-Run Validation"
+      shell: pwsh
+      run: |
+        Write-Host "Starting PowerShell Scripts with Containerized Helm (Dry-Run)"
+        cd scripts
+        .\install.ps1 -Namespace "lgtm-test-ps-container" -ReleasePrefix "ps-container-test" -DryRun
+
+    - name: "Containerized Helm Tests Summary"
+      run: |
+        echo "========================================"
+        echo "   CONTAINERIZED HELM TESTS COMPLETED"
+        echo "========================================"
+        echo ""
+        echo "Tests completed successfully:"
+        echo "- Shell Scripts + Containerized Helm (Dry-Run)"
+        echo "- PowerShell Scripts + Containerized Helm (Dry-Run)"
+        echo ""
+        echo "All containerized dry-run validations passed!"
+
+  final-summary:
+    name: "Final Test Summary"
+    runs-on: ubuntu-latest
+    needs: [validation, local-helm-tests, containerized-helm-tests]
+    if: always()
+
+    steps:
+    - name: "Overall Test Results"
+      run: |
+        echo "========================================"
+        echo "        ALL E2E TESTS COMPLETED"
+        echo "========================================"
+        echo ""
+        echo "Job Results:"
+        echo "- Validation Job: ${{ needs.validation.result }}"
+        echo "- Local Helm Tests: ${{ needs.local-helm-tests.result }}"
+        echo "- Containerized Helm Tests: ${{ needs.containerized-helm-tests.result }}"
+        echo ""
+
+        if [[ "${{ needs.validation.result }}" == "success" && "${{ needs.local-helm-tests.result }}" == "success" && "${{ needs.containerized-helm-tests.result }}" == "success" ]]; then
+          echo "🎉 ALL TESTS PASSED! 🎉"
+          echo ""
+          echo "The LGTM stack configuration is fully validated:"
+          echo "✅ Script syntax and linting"
+          echo "✅ Local Helm dry-run validation"
+          echo "✅ Containerized Helm dry-run validation"
+          echo ""
+          echo "Ready for deployment!"
         else
-          echo "Good: No namespace lgtm-test-1 found after dry-run"
+          echo "❌ Some tests failed. Check the job results above."
+          exit 1
         fi
-
-    - name: "Test 1 - Shell Scripts + Local Helm - Cleanup"
-      run: |
-        echo "Test 1 dry-run completed successfully!"
-        echo "No cleanup needed for dry-run validation"
-
-    # Test 2: Shell Scripts with Containerized Helm
-    - name: "Test 2 - Shell Scripts + Containerized Helm - Prepare Environment"
-      run: |
-        echo "Starting Test 2: Shell Scripts with Containerized Helm"
-        # Remove helm temporarily to test containerized mode
-        sudo mv /usr/local/bin/helm /usr/local/bin/helm.backup || true
-        which helm && echo "ERROR: Helm still found" && exit 1 || echo "Helm removed successfully"
-
-    - name: "Test 2 - Shell Scripts + Containerized Helm - Dry-Run Validation"
-      run: |
-        cd scripts
-        export NAMESPACE=lgtm-test-2
-        export RELEASE_PREFIX=test2
-        export DRY_RUN=true
-        ./install.sh
-
-    - name: "Test 2 - Shell Scripts + Containerized Helm - Verify Dry-Run Success"
-      run: |
-        echo "Verifying Test 2 dry-run completed successfully..."
-        echo "Dry-run validation with containerized Helm completed - no actual resources were created"
-
-    - name: "Test 2 - Shell Scripts + Containerized Helm - Cleanup"
-      run: |
-        echo "Test 2 dry-run completed successfully!"
-        # Restore helm for next tests
-        sudo mv /usr/local/bin/helm.backup /usr/local/bin/helm || true
-        helm version
-
-    # Test 3: PowerShell Scripts with Local Helm
-    - name: "Test 3 - PowerShell Scripts + Local Helm - Dry-Run Validation"
-      shell: pwsh
-      run: |
-        Write-Host "Starting Test 3: PowerShell Scripts with Local Helm (Dry-Run)"
-        cd scripts
-        .\install.ps1 -Namespace "lgtm-test-3" -ReleasePrefix "test3" -DryRun
-
-    - name: "Test 3 - PowerShell Scripts + Local Helm - Verify Dry-Run Success"
-      shell: pwsh
-      run: |
-        Write-Host "Verifying Test 3 dry-run completed successfully..."
-        Write-Host "Dry-run validation completed - no actual resources were created"
-
-    # Test 4: PowerShell Scripts with Containerized Helm
-    - name: "Test 4 - PowerShell Scripts + Containerized Helm - Prepare Environment"
-      run: |
-        echo "Starting Test 4: PowerShell Scripts with Containerized Helm"
-        # Remove helm temporarily to test containerized mode
-        sudo mv /usr/local/bin/helm /usr/local/bin/helm.backup || true
-        which helm && echo "ERROR: Helm still found" && exit 1 || echo "Helm removed successfully"
-
-    - name: "Test 4 - PowerShell Scripts + Containerized Helm - Dry-Run Validation"
-      shell: pwsh
-      run: |
-        cd scripts
-        .\install.ps1 -Namespace "lgtm-test-4" -ReleasePrefix "test4" -DryRun
-
-    - name: "Test 4 - PowerShell Scripts + Containerized Helm - Verify Dry-Run Success"
-      shell: pwsh
-      run: |
-        Write-Host "Verifying Test 4 dry-run completed successfully..."
-        Write-Host "Dry-run validation with containerized Helm completed - no actual resources were created"
-
-    - name: "Test 4 - PowerShell Scripts + Containerized Helm - Final Cleanup"
-      run: |
-        echo "Test 4 dry-run completed successfully!"
-        # Restore helm for future runs
-        sudo mv /usr/local/bin/helm.backup /usr/local/bin/helm || true
-        helm version
-
-    # Summary
-    - name: "E2E Tests Summary"
-      run: |
-        echo "========================================"
-        echo "        E2E DRY-RUN TESTS COMPLETED"
-        echo "========================================"
-        echo ""
-        echo "Validation tests completed in sequence:"
-        echo "1. Script Validation (Syntax + Linting)"
-        echo "2. Shell Scripts + Local Helm (Dry-Run)"
-        echo "3. Shell Scripts + Containerized Helm (Dry-Run)"
-        echo "4. PowerShell Scripts + Local Helm (Dry-Run)"
-        echo "5. PowerShell Scripts + Containerized Helm (Dry-Run)"
-        echo ""
-        echo "All dry-run validations passed - the LGTM stack configuration is valid!"
-        echo "No actual resources were created during these tests."
-
-        # Final cluster status
-        echo ""
-        echo "Final cluster status:"
-        kubectl get nodes
-        kubectl get namespaces | grep lgtm || echo "No test namespaces found (expected for dry-run)"

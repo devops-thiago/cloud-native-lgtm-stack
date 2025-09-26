@@ -1,53 +1,52 @@
-# Helm Utilities - Detect and use Helm (local or containerized)
+﻿# Helm Utilities - Detect and use Helm (local or containerized)
 # FOR: Internal use by install/uninstall scripts
 # USAGE: . .\helm-utils.ps1
 
-# Global variable to track Helm mode
-$Global:HELM_MODE = ""
+# Script-scoped variable to track Helm mode
+$script:HELM_MODE = ""
 
 # Function to write colored output
 function Write-ColorOutput {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Message,
-        [Parameter(Mandatory = $false)]
-        [ValidateSet("Red", "Green", "Yellow", "Blue", "White")]
-        [string]$ForegroundColor = "White"
+        [string]$Message
     )
-    Write-Host $Message -ForegroundColor $ForegroundColor
+    Write-Output $Message
 }
 
 # Function to detect Helm availability
-function Detect-Helm {
+function Test-Helm {
+    # Check for Helm first
     try {
         $helmVersion = helm version --short 2>$null
         if ($LASTEXITCODE -eq 0) {
-            $Global:HELM_MODE = "local"
-            Write-ColorOutput "✅ Helm found locally: $helmVersion" "Green"
+            $script:HELM_MODE = "local"
+            Write-ColorOutput "✅ Helm found locally: $helmVersion"
             return $true
         }
     }
     catch {
-        # Helm not found locally
+        # Helm not found locally - continue to check Docker
+        Write-ColorOutput "⚠️  Helm not found locally, checking for Docker..."
     }
 
     # Check for Docker
     try {
         docker info 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            $Global:HELM_MODE = "container"
-            Write-ColorOutput "⚠️  Helm not found locally, using containerized Helm" "Yellow"
-            Write-ColorOutput "🐳 Docker detected, will use containerized Helm" "Blue"
+            $script:HELM_MODE = "container"
+            Write-ColorOutput "🐳 Docker detected, will use containerized Helm"
             return $true
         }
     }
     catch {
-        # Docker not found
+        # Docker not found - continue to final check
+        Write-ColorOutput "⚠️  Docker not found, checking if available..."
     }
 
-    $Global:HELM_MODE = "none"
-    Write-ColorOutput "❌ Neither Helm nor Docker found" "Red"
-    Write-ColorOutput "💡 Please install either Helm or Docker to continue" "Yellow"
+    $script:HELM_MODE = "none"
+    Write-ColorOutput "❌ Neither Helm nor Docker found"
+    Write-ColorOutput "💡 Please install either Helm or Docker to continue"
     return $false
 }
 
@@ -58,20 +57,20 @@ function Invoke-Helm {
         [string[]]$Arguments
     )
 
-    switch ($Global:HELM_MODE) {
+    switch ($script:HELM_MODE) {
         "local" {
-            Write-ColorOutput "🔧 Running local Helm: helm $($Arguments -join ' ')" "Blue"
+            Write-ColorOutput "🔧 Running local Helm: helm $($Arguments -join ' ')"
             $result = & helm @Arguments
             return $result
         }
         "container" {
-            Write-ColorOutput "🐳 Running containerized Helm: $($Arguments -join ' ')" "Blue"
+            Write-ColorOutput "🐳 Running containerized Helm: $($Arguments -join ' ')"
             $scriptPath = Join-Path $PSScriptRoot "helm-container.ps1"
             $result = & $scriptPath @Arguments
             return $result
         }
         default {
-            Write-ColorOutput "❌ Helm mode not detected. Run Detect-Helm first." "Red"
+            Write-ColorOutput "❌ Helm mode not detected. Run Test-Helm first."
             throw "Helm mode not detected"
         }
     }
@@ -93,35 +92,36 @@ function Add-HelmRepo {
         try {
             Invoke-Helm "repo", "add", $RepoName, $RepoUrl
             if ($LASTEXITCODE -eq 0) {
-                Write-ColorOutput "✅ Added Helm repository: $RepoName" "Green"
+                Write-ColorOutput "✅ Added Helm repository: $RepoName"
                 return $true
             }
         }
         catch {
-            # Continue to retry logic
+            # Continue to retry logic - this is expected
+            Write-ColorOutput "⚠️  Repository add failed, will retry..."
         }
 
         $retryCount++
-        Write-ColorOutput "⚠️  Retry $retryCount/$maxRetries for repository: $RepoName" "Yellow"
+        Write-ColorOutput "⚠️  Retry $retryCount/$maxRetries for repository: $RepoName"
         Start-Sleep -Seconds 2
     }
 
-    Write-ColorOutput "❌ Failed to add repository after $maxRetries attempts: $RepoName" "Red"
+    Write-ColorOutput "❌ Failed to add repository after $maxRetries attempts: $RepoName"
     return $false
 }
 
 # Function to update Helm repositories
 function Update-HelmRepo {
-    Write-ColorOutput "📦 Updating Helm repositories..." "Yellow"
+    Write-ColorOutput "📦 Updating Helm repositories..."
     try {
         Invoke-Helm "repo", "update"
         if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "✅ Helm repositories updated" "Green"
+            Write-ColorOutput "✅ Helm repositories updated"
             return $true
         }
     }
     catch {
-        Write-ColorOutput "⚠️  Failed to update repositories, continuing anyway..." "Yellow"
+        Write-ColorOutput "⚠️  Failed to update repositories, continuing anyway..."
         return $true  # Don't fail the installation for this
     }
     return $true
@@ -136,49 +136,51 @@ function Install-HelmRelease {
         [string]$Chart,
         [Parameter(Mandatory = $true)]
         [string]$Namespace,
+        [Parameter(Mandatory = $false)]
+        [bool]$DryRun = $false,
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$AdditionalArgs
     )
 
-    if ($Global:DryRun) {
-        Write-ColorOutput "🔍 Dry-run: Validating Helm release: $ReleaseName" "Blue"
+    if ($DryRun) {
+        Write-ColorOutput "🔍 Dry-run: Validating Helm release: $ReleaseName"
         
-        $args = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace, "--dry-run=server", "--debug") + $AdditionalArgs
+        $helmArgs = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace, "--dry-run=server", "--debug") + $AdditionalArgs
         
         try {
-            Invoke-Helm @args
+            Invoke-Helm @helmArgs
             if ($LASTEXITCODE -eq 0) {
-                Write-ColorOutput "✅ Dry-run validation successful: $ReleaseName" "Green"
+                Write-ColorOutput "✅ Dry-run validation successful: $ReleaseName"
                 return $true
             }
             else {
-                Write-ColorOutput "❌ Dry-run validation failed: $ReleaseName" "Red"
+                Write-ColorOutput "❌ Dry-run validation failed: $ReleaseName"
                 return $false
             }
         }
         catch {
-            Write-ColorOutput "❌ Dry-run validation failed: $ReleaseName" "Red"
+            Write-ColorOutput "❌ Dry-run validation failed: $ReleaseName"
             return $false
         }
     }
     else {
-        Write-ColorOutput "🚀 Installing/upgrading Helm release: $ReleaseName" "Blue"
+        Write-ColorOutput "🚀 Installing/upgrading Helm release: $ReleaseName"
 
-        $args = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace) + $AdditionalArgs
+        $helmArgs = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace) + $AdditionalArgs
 
         try {
-            Invoke-Helm @args
+            Invoke-Helm @helmArgs
             if ($LASTEXITCODE -eq 0) {
-                Write-ColorOutput "✅ Successfully deployed: $ReleaseName" "Green"
+                Write-ColorOutput "✅ Successfully deployed: $ReleaseName"
                 return $true
             }
             else {
-                Write-ColorOutput "❌ Failed to deploy: $ReleaseName" "Red"
+                Write-ColorOutput "❌ Failed to deploy: $ReleaseName"
                 return $false
             }
         }
         catch {
-            Write-ColorOutput "❌ Failed to deploy: $ReleaseName" "Red"
+            Write-ColorOutput "❌ Failed to deploy: $ReleaseName"
             return $false
         }
     }
@@ -197,42 +199,42 @@ function Uninstall-HelmRelease {
     try {
         Invoke-Helm "status", $ReleaseName, "-n", $Namespace 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "🗑️  Uninstalling Helm release: $ReleaseName" "Yellow"
+            Write-ColorOutput "🗑️  Uninstalling Helm release: $ReleaseName"
             Invoke-Helm "uninstall", $ReleaseName, "-n", $Namespace
             if ($LASTEXITCODE -eq 0) {
-                Write-ColorOutput "✅ Successfully uninstalled: $ReleaseName" "Green"
+                Write-ColorOutput "✅ Successfully uninstalled: $ReleaseName"
                 return $true
             }
             else {
-                Write-ColorOutput "❌ Failed to uninstall: $ReleaseName" "Red"
+                Write-ColorOutput "❌ Failed to uninstall: $ReleaseName"
                 return $false
             }
         }
     }
     catch {
-        Write-ColorOutput "⚠️  Helm release not found, skipping: $ReleaseName" "Yellow"
+        Write-ColorOutput "⚠️  Helm release not found, skipping: $ReleaseName"
         return $true
     }
 }
 
 # Function to prepare containerized Helm (pull images if needed)
 function Initialize-ContainerizedHelm {
-    if ($Global:HELM_MODE -eq "container") {
-        Write-ColorOutput "📦 Preparing containerized Helm environment..." "Yellow"
+    if ($script:HELM_MODE -eq "container") {
+        Write-ColorOutput "📦 Preparing containerized Helm environment..."
         $scriptPath = Join-Path $PSScriptRoot "helm-container.ps1"
         try {
             & $scriptPath --pull-images
             if ($LASTEXITCODE -eq 0) {
-                Write-ColorOutput "✅ Containerized Helm ready" "Green"
+                Write-ColorOutput "✅ Containerized Helm ready"
                 return $true
             }
             else {
-                Write-ColorOutput "❌ Failed to prepare containerized Helm" "Red"
+                Write-ColorOutput "❌ Failed to prepare containerized Helm"
                 return $false
             }
         }
         catch {
-            Write-ColorOutput "❌ Failed to prepare containerized Helm" "Red"
+            Write-ColorOutput "❌ Failed to prepare containerized Helm"
             return $false
         }
     }
@@ -241,26 +243,26 @@ function Initialize-ContainerizedHelm {
 
 # Function to show Helm mode information
 function Show-HelmInfo {
-    Write-ColorOutput "🔍 Helm Configuration:" "Blue"
-    switch ($Global:HELM_MODE) {
+    Write-ColorOutput "🔍 Helm Configuration:"
+    switch ($script:HELM_MODE) {
         "local" {
-            Write-ColorOutput "  Mode: Local Helm installation" "Green"
+            Write-ColorOutput "  Mode: Local Helm installation"
             try {
                 $version = Invoke-Helm "version", "--short"
-                Write-Host "  $version"
+                Write-Output "  $version"
             }
             catch {
-                Write-Host "  Version information unavailable"
+                Write-Output "  Version information unavailable"
             }
         }
         "container" {
-            Write-ColorOutput "  Mode: Containerized Helm" "Blue"
-            Write-ColorOutput "  Image: $HELM_IMAGE" "Blue"
-            Write-ColorOutput "  Note: Requires Docker to be running" "Yellow"
+            Write-ColorOutput "  Mode: Containerized Helm"
+            Write-ColorOutput "  Image: $HELM_IMAGE"
+            Write-ColorOutput "  Note: Requires Docker to be running"
         }
         default {
-            Write-ColorOutput "  Mode: Not detected" "Red"
+            Write-ColorOutput "  Mode: Not detected"
         }
     }
-    Write-Host ""
+    Write-Output ""
 }

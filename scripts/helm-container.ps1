@@ -1,4 +1,4 @@
-# Containerized Helm Wrapper Script
+﻿# Containerized Helm Wrapper Script
 # FOR: Environments where Helm is not installed locally
 # USAGE: .\helm-container.ps1 [helm-commands]
 # REQUIRES: Docker installed and running
@@ -21,7 +21,7 @@ function Write-ColorOutput {
         [ValidateSet("Red", "Green", "Yellow", "Blue", "White")]
         [string]$ForegroundColor = "White"
     )
-    Write-Host $Message -ForegroundColor $ForegroundColor
+    Write-Output $Message -ForegroundColor $ForegroundColor
 }
 
 # Function to check if Docker is available
@@ -33,14 +33,14 @@ function Test-Docker {
             return $true
         }
         else {
-            Write-ColorOutput "❌ Docker is not running" "Red"
-            Write-ColorOutput "💡 Please start Docker to use containerized Helm" "Yellow"
+            Write-ColorOutput "❌ Docker is not running"
+            Write-ColorOutput "💡 Please start Docker to use containerized Helm"
             return $false
         }
     }
     catch {
-        Write-ColorOutput "❌ Docker is not installed or not in PATH" "Red"
-        Write-ColorOutput "💡 Please install Docker to use containerized Helm" "Yellow"
+        Write-ColorOutput "❌ Docker is not installed or not in PATH"
+        Write-ColorOutput "💡 Please install Docker to use containerized Helm"
         return $false
     }
 }
@@ -59,8 +59,8 @@ function Get-KubeconfigPath {
         return "$env:USERPROFILE\.kube\config"
     }
     else {
-        Write-ColorOutput "❌ No kubeconfig found" "Red"
-        Write-ColorOutput "💡 Please ensure kubectl is configured" "Yellow"
+        Write-ColorOutput "❌ No kubeconfig found"
+        Write-ColorOutput "💡 Please ensure kubectl is configured"
         throw "No kubeconfig found"
     }
 }
@@ -82,18 +82,16 @@ function Invoke-HelmContainer {
             # Convert absolute host path to container path
             $containerPath = $arg -replace [regex]::Escape($projectRoot), "/workspace"
             $convertedArgs += $containerPath
-            Write-ColorOutput "📁 Converting path: $arg -> $containerPath" "Blue"
+            Write-ColorOutput "📁 Converting path: $arg -> $containerPath"
         }
         else {
             $convertedArgs += $arg
         }
     }
 
-    Write-ColorOutput "🐳 Running Helm in container: $HELM_IMAGE" "Blue"
+    Write-ColorOutput "🐳 Running Helm in container: $HELM_IMAGE"
 
-    # Convert Windows paths to Linux paths for Docker
-    $kubeconfigLinux = $kubeconfigPath -replace '\\', '/' -replace '^([A-Za-z]):', '/mnt/$1'
-    $workspaceLinux = $projectRoot -replace '\\', '/' -replace '^([A-Za-z]):', '/mnt/$1'
+    # Note: Path conversion not needed for current Docker setup
 
     # Mount kubeconfig and project directory, run helm command
     # Add Docker Desktop network compatibility and persistent Helm cache
@@ -131,7 +129,7 @@ function Invoke-KubectlContainer {
 
     $kubeconfigPath = Get-KubeconfigPath
 
-    Write-ColorOutput "🐳 Running kubectl in container: $KUBECTL_IMAGE" "Blue"
+    Write-ColorOutput "🐳 Running kubectl in container: $KUBECTL_IMAGE"
 
     $dockerArgs = @(
         "run", "--rm",
@@ -146,53 +144,53 @@ function Invoke-KubectlContainer {
 
 # Function to test cluster connectivity
 function Test-ClusterConnection {
-    Write-ColorOutput "🔍 Testing Kubernetes cluster connectivity..." "Yellow"
+    Write-ColorOutput "🔍 Testing Kubernetes cluster connectivity..."
     try {
         Invoke-KubectlContainer "cluster-info" 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "✅ Kubernetes cluster is accessible" "Green"
+            Write-ColorOutput "✅ Kubernetes cluster is accessible"
             return $true
         }
         else {
-            Write-ColorOutput "❌ Cannot connect to Kubernetes cluster" "Red"
+            Write-ColorOutput "❌ Cannot connect to Kubernetes cluster"
             return $false
         }
     }
     catch {
-        Write-ColorOutput "❌ Cannot connect to Kubernetes cluster" "Red"
+        Write-ColorOutput "❌ Cannot connect to Kubernetes cluster"
         return $false
     }
 }
 
 # Function to pull required images
-function Get-ContainerImages {
-    Write-ColorOutput "📦 Pulling required container images..." "Yellow"
+function Get-ContainerImage {
+    Write-ColorOutput "📦 Pulling required container images..."
 
-    Write-ColorOutput "Pulling Helm image: $HELM_IMAGE" "Blue"
+    Write-ColorOutput "Pulling Helm image: $HELM_IMAGE"
     docker pull $HELM_IMAGE
 
-    Write-ColorOutput "Pulling kubectl image: $KUBECTL_IMAGE" "Blue"
+    Write-ColorOutput "Pulling kubectl image: $KUBECTL_IMAGE"
     docker pull $KUBECTL_IMAGE
 
-    Write-ColorOutput "✅ Container images ready" "Green"
+    Write-ColorOutput "✅ Container images ready"
 }
 
 # Function to show help
 function Show-Help {
-    Write-ColorOutput "🐳 Containerized Helm Wrapper" "Yellow"
-    Write-Host ""
-    Write-ColorOutput "Usage:" "Blue"
-    Write-Host "  .\helm-container.ps1 [helm-command] [args...]"
-    Write-Host ""
-    Write-ColorOutput "Examples:" "Blue"
-    Write-Host "  .\helm-container.ps1 version"
-    Write-Host "  .\helm-container.ps1 repo add grafana https://grafana.github.io/helm-charts"
-    Write-Host "  .\helm-container.ps1 install my-app ./chart"
-    Write-Host ""
-    Write-ColorOutput "Special commands:" "Blue"
-    Write-Host "  .\helm-container.ps1 --test-connection    # Test cluster connectivity"
-    Write-Host "  .\helm-container.ps1 --pull-images        # Pre-pull container images"
-    Write-Host "  .\helm-container.ps1 --kubectl [args...]  # Run kubectl in container"
+    Write-ColorOutput "🐳 Containerized Helm Wrapper"
+    Write-Output ""
+    Write-ColorOutput "Usage:"
+    Write-Output "  .\helm-container.ps1 [helm-command] [args...]"
+    Write-Output ""
+    Write-ColorOutput "Examples:"
+    Write-Output "  .\helm-container.ps1 version"
+    Write-Output "  .\helm-container.ps1 repo add grafana https://grafana.github.io/helm-charts"
+    Write-Output "  .\helm-container.ps1 install my-app ./chart"
+    Write-Output ""
+    Write-ColorOutput "Special commands:"
+    Write-Output "  .\helm-container.ps1 --test-connection    # Test cluster connectivity"
+    Write-Output "  .\helm-container.ps1 --pull-images        # Pre-pull container images"
+    Write-Output "  .\helm-container.ps1 --kubectl [args...]  # Run kubectl in container"
 }
 
 # Main execution
@@ -219,7 +217,7 @@ function Main {
             }
         }
         "--pull-images" {
-            Get-ContainerImages
+            Get-ContainerImage
             exit 0
         }
         "--kubectl" {
@@ -234,8 +232,8 @@ function Main {
         default {
             # Test cluster connection first
             if (-not (Test-ClusterConnection)) {
-                Write-ColorOutput "❌ Cluster connectivity test failed" "Red"
-                Write-ColorOutput "💡 Please check your kubeconfig and cluster status" "Yellow"
+                Write-ColorOutput "❌ Cluster connectivity test failed"
+                Write-ColorOutput "💡 Please check your kubeconfig and cluster status"
                 exit 1
             }
 

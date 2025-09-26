@@ -1,4 +1,4 @@
-# Cloud Native LTGM Stack Uninstallation Script
+﻿# Cloud Native LTGM Stack Uninstallation Script
 # This script removes Loki, Tempo, Grafana, and Minio from Kubernetes
 
 param(
@@ -14,12 +14,9 @@ $scriptPath = Join-Path $PSScriptRoot "helm-utils.ps1"
 function Write-ColorOutput {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Message,
-        [Parameter(Mandatory = $false)]
-        [ValidateSet("Red", "Green", "Yellow", "Blue", "White")]
-        [string]$ForegroundColor = "White"
+        [string]$Message
     )
-    Write-Host $Message -ForegroundColor $ForegroundColor
+    Write-Output $Message
 }
 
 # Function to check if command exists
@@ -34,17 +31,17 @@ function Test-Command {
     }
 }
 
-Write-ColorOutput "🗑️  Starting Cloud Native LGTM Stack Uninstallation" "Yellow"
-Write-Host "Namespace: $Namespace"
-Write-Host "Release Prefix: $ReleasePrefix"
-Write-Host ""
+Write-ColorOutput "🗑️  Starting Cloud Native LGTM Stack Uninstallation"
+Write-Output "Namespace: $Namespace"
+Write-Output "Release Prefix: $ReleasePrefix"
+Write-Output ""
 
 # Check prerequisites
-Write-ColorOutput "🔍 Checking prerequisites..." "Yellow"
+Write-ColorOutput "🔍 Checking prerequisites..."
 
 # Detect and configure Helm (local or containerized)
-if (-not (Detect-Helm)) {
-    Write-ColorOutput "⚠️  Neither Helm nor Docker available, will skip Helm releases" "Yellow"
+if (-not (Test-Helm)) {
+    Write-ColorOutput "⚠️  Neither Helm nor Docker available, will skip Helm releases"
 }
 else {
     Show-HelmInfo
@@ -52,7 +49,7 @@ else {
 }
 
 if (-not (Test-Command "kubectl")) {
-    Write-ColorOutput "❌ kubectl is not installed. Please install kubectl first." "Red"
+    Write-ColorOutput "❌ kubectl is not installed. Please install kubectl first."
     exit 1
 }
 
@@ -64,12 +61,12 @@ try {
     }
 }
 catch {
-    Write-ColorOutput "❌ Cannot connect to Kubernetes cluster. Please check your kubeconfig." "Red"
+    Write-ColorOutput "❌ Cannot connect to Kubernetes cluster. Please check your kubeconfig."
     exit 1
 }
 
-Write-ColorOutput "✅ Prerequisites check passed" "Green"
-Write-Host ""
+Write-ColorOutput "✅ Prerequisites check passed"
+Write-Output ""
 
 # Function to uninstall helm release (using utilities)
 function Remove-HelmRelease {
@@ -78,14 +75,14 @@ function Remove-HelmRelease {
         [string]$ComponentName
     )
 
-    if ($Global:HELM_MODE -ne "none") {
-        Write-ColorOutput "🗑️  Uninstalling $ComponentName..." "Yellow"
+    if ($script:HELM_MODE -ne "none") {
+        Write-ColorOutput "🗑️  Uninstalling $ComponentName..."
         Uninstall-HelmRelease $ReleaseName $Namespace
     }
     else {
-        Write-ColorOutput "⚠️  Helm not available, skipping $ComponentName uninstall" "Yellow"
+        Write-ColorOutput "⚠️  Helm not available, skipping $ComponentName uninstall"
     }
-    Write-Host ""
+    Write-Output ""
 }
 
 # Uninstall components in reverse order
@@ -99,15 +96,15 @@ Remove-HelmRelease "${ReleasePrefix}-node-exporter" "Node Exporter (Helm)"
 Remove-HelmRelease "${ReleasePrefix}-minio" "Minio"
 
 # Clean up custom node-exporter DaemonSet if it exists
-Write-ColorOutput "🧹 Cleaning up custom node-exporter DaemonSet..." "Yellow"
+Write-ColorOutput "🧹 Cleaning up custom node-exporter DaemonSet..."
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $nodeExporterDaemonSetPath = Join-Path $projectRoot "values/node-exporter-docker-desktop-daemonset.yaml"
 kubectl delete -f $nodeExporterDaemonSetPath --ignore-not-found=true 2>$null
-Write-ColorOutput "✅ Custom node-exporter cleaned up" "Green"
-Write-Host ""
+Write-ColorOutput "✅ Custom node-exporter cleaned up"
+Write-Output ""
 
 # Clean up PVCs if they exist
-Write-ColorOutput "🧹 Cleaning up Persistent Volume Claims..." "Yellow"
+Write-ColorOutput "🧹 Cleaning up Persistent Volume Claims..."
 
 try {
     $pvcList = kubectl get pvc -n $Namespace --no-headers 2>$null | Where-Object {
@@ -115,43 +112,43 @@ try {
     } | ForEach-Object { ($_ -split '\s+')[0] }
 
     if ($pvcList) {
-        Write-Host "Found PVCs to clean up:"
-        $pvcList | ForEach-Object { Write-Host "  $_" }
-        Write-Host ""
+        Write-Output "Found PVCs to clean up:"
+        $pvcList | ForEach-Object { Write-Output "  $_" }
+        Write-Output ""
 
         $confirmation = Read-Host "Do you want to delete these PVCs? This will permanently delete all data! [y/N]"
         if ($confirmation -match '^[Yy]$') {
             $pvcList | ForEach-Object {
                 if ($_) {
-                    Write-Host "Deleting PVC: $_"
+                    Write-Output "Deleting PVC: $_"
                     try {
                         kubectl delete pvc $_ -n $Namespace --ignore-not-found=true 2>$null
                         if ($LASTEXITCODE -ne 0) {
-                            Write-Host "  Warning: Could not delete PVC $_"
+                            Write-Output "  Warning: Could not delete PVC $_"
                         }
                     }
                     catch {
-                        Write-Host "  Warning: Could not delete PVC $_"
+                        Write-Output "  Warning: Could not delete PVC $_"
                     }
                 }
             }
-            Write-ColorOutput "✅ PVC deletion completed" "Green"
+            Write-ColorOutput "✅ PVC deletion completed"
         }
         else {
-            Write-ColorOutput "⚠️  PVCs left intact" "Yellow"
+            Write-ColorOutput "⚠️  PVCs left intact"
         }
     }
     else {
-        Write-Host "No PVCs found to clean up"
+        Write-Output "No PVCs found to clean up"
     }
 }
 catch {
-    Write-Host "No PVCs found to clean up"
+    Write-Output "No PVCs found to clean up"
 }
-Write-Host ""
+Write-Output ""
 
 # Check for remaining resources
-Write-ColorOutput "🔍 Checking for remaining resources..." "Yellow"
+Write-ColorOutput "🔍 Checking for remaining resources..."
 
 try {
     $remainingPods = (kubectl get pods -n $Namespace --no-headers 2>$null | Where-Object {
@@ -173,55 +170,55 @@ catch {
 }
 
 if ($remainingPods -gt 0 -or $remainingServices -gt 0 -or $remainingSecrets -gt 0) {
-    Write-ColorOutput "⚠️  Some resources may still be terminating:" "Yellow"
-    Write-Host "  Pods: $remainingPods"
-    Write-Host "  Services: $remainingServices"
-    Write-Host "  Secrets: $remainingSecrets"
-    Write-Host ""
-    Write-Host "You can check the status with:"
-    Write-Host "  kubectl get all -n $Namespace"
+    Write-ColorOutput "⚠️  Some resources may still be terminating:"
+    Write-Output "  Pods: $remainingPods"
+    Write-Output "  Services: $remainingServices"
+    Write-Output "  Secrets: $remainingSecrets"
+    Write-Output ""
+    Write-Output "You can check the status with:"
+    Write-Output "  kubectl get all -n $Namespace"
 }
 else {
-    Write-ColorOutput "✅ No remaining LTGM resources found" "Green"
+    Write-ColorOutput "✅ No remaining LTGM resources found"
 }
-Write-Host ""
+Write-Output ""
 
 # Option to delete namespace
 if ($Namespace -ne "default" -and $Namespace -ne "kube-system") {
     $confirmation = Read-Host "Do you want to delete the namespace '$Namespace'? [y/N]"
     if ($confirmation -match '^[Yy]$') {
         kubectl delete namespace $Namespace 2>$null
-        Write-ColorOutput "✅ Namespace '$Namespace' deleted" "Green"
+        Write-ColorOutput "✅ Namespace '$Namespace' deleted"
     }
     else {
-        Write-ColorOutput "⚠️  Namespace '$Namespace' left intact" "Yellow"
+        Write-ColorOutput "⚠️  Namespace '$Namespace' left intact"
     }
 }
 else {
-    Write-ColorOutput "ℹ️  Namespace '$Namespace' is a system namespace and won't be deleted" "Yellow"
+    Write-ColorOutput "ℹ️  Namespace '$Namespace' is a system namespace and won't be deleted"
 }
-Write-Host ""
+Write-Output ""
 
-Write-ColorOutput "🎉 LGTM Stack uninstallation completed!" "Green"
-Write-Host ""
-Write-ColorOutput "📋 Cleanup Summary:" "Yellow"
-Write-Host "  ✅ Alloy uninstalled"
-Write-Host "  ✅ Grafana uninstalled"
-Write-Host "  ✅ Mimir uninstalled"
-Write-Host "  ✅ Tempo uninstalled"
-Write-Host "  ✅ Loki uninstalled"
-Write-Host "  ✅ Node Exporter uninstalled"
-Write-Host "  ✅ Kube-state-metrics uninstalled"
-Write-Host "  ✅ Minio uninstalled"
-Write-Host "  ✅ Custom dashboard ConfigMaps removed"
-Write-Host ""
-Write-ColorOutput "🛠️  Manual cleanup (if needed):" "Yellow"
-Write-Host "  # Remove any remaining resources"
-Write-Host "  kubectl get all -n $Namespace"
-Write-Host "  kubectl delete <resource-type> <resource-name> -n $Namespace"
-Write-Host ""
-Write-Host "  # Remove storage classes (if custom ones were created)"
-Write-Host "  kubectl get storageclass"
-Write-Host ""
+Write-ColorOutput "🎉 LGTM Stack uninstallation completed!"
+Write-Output ""
+Write-ColorOutput "📋 Cleanup Summary:"
+Write-Output "  ✅ Alloy uninstalled"
+Write-Output "  ✅ Grafana uninstalled"
+Write-Output "  ✅ Mimir uninstalled"
+Write-Output "  ✅ Tempo uninstalled"
+Write-Output "  ✅ Loki uninstalled"
+Write-Output "  ✅ Node Exporter uninstalled"
+Write-Output "  ✅ Kube-state-metrics uninstalled"
+Write-Output "  ✅ Minio uninstalled"
+Write-Output "  ✅ Custom dashboard ConfigMaps removed"
+Write-Output ""
+Write-ColorOutput "🛠️  Manual cleanup (if needed):"
+Write-Output "  # Remove any remaining resources"
+Write-Output "  kubectl get all -n $Namespace"
+Write-Output "  kubectl delete <resource-type> <resource-name> -n $Namespace"
+Write-Output ""
+Write-Output "  # Remove storage classes (if custom ones were created)"
+Write-Output "  kubectl get storageclass"
+Write-Output ""
 
-Write-ColorOutput "✅ Uninstallation completed successfully!" "Green"
+Write-ColorOutput "✅ Uninstallation completed successfully!"
