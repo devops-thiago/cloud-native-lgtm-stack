@@ -86,6 +86,34 @@ Perfect for learning, experimentation, and understanding how modern observabilit
 - **kubectl**: Kubernetes command-line tool
 - **Helm 3.x OR Docker**: Package manager for Kubernetes OR Docker for containerized Helm
 
+### 🐳 Docker Desktop Users
+
+**Important Setup Requirements:**
+- Ensure **Docker Desktop is running**
+- Enable **Kubernetes** in Docker Desktop settings:
+  - Go to Docker Desktop → Settings → Kubernetes
+  - Check "Enable Kubernetes"
+  - Click "Apply & Restart"
+- Verify single-node cluster is running: `kubectl get nodes`
+
+### 🔧 Kubeconfig Configuration
+
+The scripts automatically detect your kubeconfig in this order:
+1. **KUBECONFIG environment variable** (if set)
+2. **~/.kube/config** (default location)
+3. **Windows**: `%USERPROFILE%\.kube\config` (PowerShell fallback)
+
+**Custom kubeconfig path:**
+```bash
+# Linux/macOS/WSL
+export KUBECONFIG=/path/to/your/kubeconfig
+./scripts/install.sh
+
+# PowerShell (any platform)
+$env:KUBECONFIG = "/path/to/your/kubeconfig"
+./scripts/install.ps1
+```
+
 ### Platform-Specific Requirements
 
 **Linux/macOS**:
@@ -108,9 +136,10 @@ The installation script automatically detects your environment:
 
 **Option 2: Containerized Helm** (No local install needed)
 - Requires Docker installed and running
-- Uses `alpine/helm:3.13.2` container image
+- Uses `alpine/helm:3.13.2` and `alpine/kubectl:1.34.1` container images
 - Perfect for environments where you can't/don't want to install Helm locally
 - Automatically downloads required container images
+- **CI/GitHub Actions compatible** with automatic network detection
 
 **The script will:**
 1. Check for local Helm installation first
@@ -122,6 +151,35 @@ The installation script automatically detects your environment:
 - **CPU**: 4 cores recommended (2 cores minimum)
 - **Memory**: 6GB RAM recommended (4GB minimum)
 - **Storage**: 15GB available disk space
+
+### ✅ Environment Verification
+
+Before installation, verify your environment is ready:
+
+```bash
+# Check Kubernetes cluster
+kubectl cluster-info
+kubectl get nodes
+
+# Check Docker (if using containerized Helm)
+docker info
+docker run --rm hello-world
+
+# Check Helm (if installed locally)
+helm version
+
+# Check available resources
+kubectl top nodes 2>/dev/null || echo "Metrics server not available (optional)"
+
+# Verify storage class
+kubectl get storageclass
+```
+
+**Expected output examples:**
+- Kubernetes cluster should show "running" status
+- At least one node should be "Ready"
+- Docker should show server version and no errors
+- Default storage class should be available
 
 ## 🚀 Quick Start
 
@@ -257,44 +315,196 @@ If you need to run Helm commands manually without local installation:
 
 **Linux/macOS/WSL (Bash):**
 ```bash
-# Use the containerized Helm wrapper
 ./scripts/helm-container.sh version
-./scripts/helm-container.sh repo list
-./scripts/helm-container.sh list -A
-
-# Test cluster connectivity
 ./scripts/helm-container.sh --test-connection
-
-# Pre-pull container images
-./scripts/helm-container.sh --pull-images
-
-# Run kubectl in container
 ./scripts/helm-container.sh --kubectl get nodes
 ```
 
 **Any Platform (PowerShell 7+):**
 ```powershell
-# Use the containerized Helm wrapper (works on Windows/Linux/macOS)
-./scripts/helm-container.ps1 version           # Linux/macOS
-.\scripts\helm-container.ps1 version           # Windows
-
-# Test cluster connectivity
-./scripts/helm-container.ps1 --test-connection  # Linux/macOS
-.\scripts\helm-container.ps1 --test-connection  # Windows
-
-# Pre-pull container images
-./scripts/helm-container.ps1 --pull-images
-
-# Run kubectl in container
+./scripts/helm-container.ps1 version
+./scripts/helm-container.ps1 --test-connection
 ./scripts/helm-container.ps1 --kubectl get nodes
 ```
 
-**Benefits of Containerized Helm:**
-- No need to install Helm locally
+**Benefits:**
+- No local Helm installation required
 - Consistent Helm version across environments
-- Isolated execution environment
-- Automatically mounts kubeconfig and project files
-- Works on any system with Docker installed
+- Automatic environment detection (local/CI)
+- Smart TTY handling for CI environments
+
+## 🔧 Manual Installation (Component by Component)
+
+If you prefer to install components manually or customize the installation order:
+
+### Prerequisites for Manual Installation
+
+```bash
+# Add required Helm repositories
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo add minio https://charts.min.io/
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Create namespace
+kubectl create namespace observability
+```
+
+### 1. Install Minio (Storage Backend)
+
+**Local Helm:**
+```bash
+helm upgrade --install ltgm-minio minio/minio \
+  --namespace observability \
+  --values values/minio-values.yaml \
+  --wait --timeout=10m
+```
+
+**Containerized Helm:**
+```bash
+# Bash/Linux/macOS
+./scripts/helm-container.sh upgrade --install ltgm-minio minio/minio \
+  --namespace observability \
+  --values values/minio-values.yaml \
+  --wait --timeout=10m
+
+# PowerShell (any platform)
+./scripts/helm-container.ps1 upgrade --install ltgm-minio minio/minio \
+  --namespace observability \
+  --values values/minio-values.yaml \
+  --wait --timeout=10m
+```
+
+### 2. Install Loki (Log Aggregation)
+
+```bash
+# Wait for Minio to be ready first
+kubectl wait -n observability --for=condition=ready pod -l "release=ltgm-minio" --timeout=300s
+
+# Local Helm
+helm upgrade --install ltgm-loki grafana/loki-distributed \
+  --namespace observability \
+  --values values/loki-distributed-values.yaml \
+  --wait --timeout=10m
+
+# Containerized Helm (choose your platform)
+./scripts/helm-container.sh upgrade --install ltgm-loki grafana/loki-distributed \
+  --namespace observability --values values/loki-distributed-values.yaml --wait --timeout=10m
+```
+
+### 3. Install Tempo (Distributed Tracing)
+
+```bash
+# Local Helm
+helm upgrade --install ltgm-tempo grafana/tempo-distributed \
+  --namespace observability \
+  --values values/tempo-distributed-values.yaml \
+  --wait --timeout=10m
+
+# Containerized Helm
+./scripts/helm-container.sh upgrade --install ltgm-tempo grafana/tempo-distributed \
+  --namespace observability --values values/tempo-distributed-values.yaml --wait --timeout=10m
+```
+
+### 4. Install Mimir (Metrics Storage)
+
+```bash
+# Local Helm
+helm upgrade --install ltgm-mimir grafana/mimir-distributed \
+  --namespace observability \
+  --values values/mimir-distributed-values.yaml \
+  --wait --timeout=10m
+
+# Containerized Helm
+./scripts/helm-container.sh upgrade --install ltgm-mimir grafana/mimir-distributed \
+  --namespace observability --values values/mimir-distributed-values.yaml --wait --timeout=10m
+```
+
+### 5. Install Grafana (Visualization)
+
+```bash
+# Local Helm
+helm upgrade --install ltgm-grafana grafana/grafana \
+  --namespace observability \
+  --values values/grafana-values.yaml \
+  --wait --timeout=10m
+
+# Containerized Helm
+./scripts/helm-container.sh upgrade --install ltgm-grafana grafana/grafana \
+  --namespace default --values values/grafana-values.yaml --wait --timeout=10m
+```
+
+### 6. Deploy Custom Dashboards
+
+```bash
+kubectl apply -f values/kubernetes-dashboards-configmap.yaml -n observability
+```
+
+### 7. Install Alloy (Data Collector)
+
+```bash
+# Local Helm
+helm upgrade --install ltgm-alloy grafana/alloy \
+  --namespace observability \
+  --values values/alloy-values.yaml \
+  --wait --timeout=10m
+
+# Containerized Helm
+./scripts/helm-container.sh upgrade --install ltgm-alloy grafana/alloy \
+  --namespace observability --values values/alloy-values.yaml --wait --timeout=10m
+```
+
+### 8. Install Kube-state-metrics
+
+```bash
+# Local Helm
+helm upgrade --install ltgm-kube-state-metrics prometheus-community/kube-state-metrics \
+  --namespace observability \
+  --values values/kube-state-metrics-values.yaml \
+  --wait --timeout=10m
+
+# Containerized Helm
+./scripts/helm-container.sh upgrade --install ltgm-kube-state-metrics prometheus-community/kube-state-metrics \
+  --namespace observability --values values/kube-state-metrics-values.yaml --wait --timeout=10m
+```
+
+### 9. Install Node-exporter
+
+**Option A: Docker Desktop (Custom DaemonSet)**
+```bash
+kubectl apply -f values/node-exporter-docker-desktop-daemonset.yaml -n observability
+```
+
+**Option B: Standard Kubernetes (Helm Chart)**
+```bash
+# Local Helm
+helm upgrade --install ltgm-node-exporter prometheus-community/prometheus-node-exporter \
+  --namespace observability \
+  --values values/node-exporter-values.yaml \
+  --wait --timeout=10m
+
+# Containerized Helm
+./scripts/helm-container.sh upgrade --install ltgm-node-exporter prometheus-community/prometheus-node-exporter \
+  --namespace observability --values values/node-exporter-values.yaml --wait --timeout=10m
+```
+
+### Verification Commands
+
+```bash
+# Check all deployments
+kubectl get pods -n observability
+helm list -n observability
+
+# Access Grafana
+kubectl port-forward svc/ltgm-grafana 3000:80 -n default
+# Open http://localhost:3000 (admin/admin123)
+
+# Access Minio Console
+kubectl port-forward svc/ltgm-minio-console 9001:9001 -n default
+# Open http://localhost:9001 (admin/password123)
+```
+
+**Note**: The automated scripts handle dependency ordering and retries. Manual installation requires careful attention to component startup order.
 
 ## 🛠️ Usage Examples
 
@@ -402,22 +612,7 @@ If Kubernetes dashboards show no data:
    kubectl logs -l app.kubernetes.io/name=grafana -c grafana-sc-dashboard -n default
    ```
 
-3. **Update dashboards**:
-
-   **Linux/macOS/WSL (Bash):**
-   ```bash
-   cd scripts
-   ./update-grafana-dashboards.sh
-   ```
-
-   **Any Platform (PowerShell 7+):**
-   ```powershell
-   cd scripts
-   ./update-grafana-dashboards.ps1     # Linux/macOS
-   .\update-grafana-dashboards.ps1     # Windows
-   ```
-
-4. **Check metric availability in Grafana**:
+3. **Check metric availability in Grafana**:
    - Go to Explore → Mimir datasource
    - Try queries like: `kube_pod_info`, `container_cpu_usage_seconds_total`, `node_memory_MemTotal_bytes`
 
@@ -425,10 +620,60 @@ If Kubernetes dashboards show no data:
 
 If you encounter problems with containerized Helm:
 
+#### 1. TTY Issues in CI Environments
+
+**Error**: "the input device is not a TTY"
+
+**Solution**: The scripts automatically detect CI environments (GitHub Actions, etc.) and disable TTY flags. If this fails:
+
+```bash
+# Force CI mode manually
+CI=true ./scripts/install.sh
+# or
+CI=true ./scripts/helm-container.sh --test-connection
+```
+
+#### 2. Network Connectivity Issues
+
+**Error**: "Cannot connect to Kubernetes cluster"
+
+**Solutions**:
+
+- **KinD/Local clusters**: Scripts automatically use `--network=host` in CI
+- **Docker Desktop**: Scripts use `--add-host kubernetes.docker.internal:host-gateway`
+- **Custom kubeconfig**: Ensure `KUBECONFIG` environment variable is set
+
+```bash
+# Test network connectivity
+docker run --rm --network=host alpine/kubectl:1.34.1 version --client
+
+# Verify kubeconfig mounting
+ls -la ~/.kube/config
+echo $KUBECONFIG
+```
+
+#### 3. Container Image Issues
+
+**Error**: Image pull failures or kubectl connectivity issues
+
+**Solution**: Update to latest images and verify connectivity:
+
+```bash
+# Pre-pull correct images
+docker pull alpine/helm:3.13.2
+docker pull alpine/kubectl:1.34.1
+
+# Test images work
+docker run --rm alpine/helm:3.13.2 version --client
+docker run --rm alpine/kubectl:1.34.1 version --client
+```
+
+#### 4. General Containerized Helm Troubleshooting
+
 1. **Check Docker status**:
    ```bash
    docker info
-   docker images | grep helm
+   docker images | grep -E "(helm|kubectl)"
    ```
 
 2. **Test containerized Helm directly**:
@@ -444,27 +689,48 @@ If you encounter problems with containerized Helm:
    ./scripts/helm-container.ps1 --test-connection  # Linux/macOS
    .\scripts\helm-container.ps1 --test-connection  # Windows
    ./scripts/helm-container.ps1 version
-   .\scripts\helm-container.ps1 version
    ```
 
-3. **Pre-pull images manually**:
-   ```bash
-   docker pull alpine/helm:3.13.2
-   docker pull bitnami/kubectl:latest
-   ```
-
-4. **Check kubeconfig access**:
+3. **Check kubeconfig access**:
 
    **Linux/macOS/WSL (Bash):**
    ```bash
    ./scripts/helm-container.sh --kubectl cluster-info
+   ./scripts/helm-container.sh --kubectl get nodes
    ```
 
    **Any Platform (PowerShell 7+):**
    ```powershell
    ./scripts/helm-container.ps1 --kubectl cluster-info   # Linux/macOS
-   .\scripts\helm-container.ps1 --kubectl cluster-info   # Windows
+   .\scripts\helm-container.ps1 --kubectl get nodes      # Windows
    ```
+
+4. **Debug container execution**:
+   ```bash
+   # Check if containers can access the cluster
+   docker run --rm -v ~/.kube/config:/tmp/kubeconfig:ro \
+     -e KUBECONFIG=/tmp/kubeconfig --network=host \
+     alpine/kubectl:1.34.1 cluster-info
+   ```
+
+#### 5. Environment-Specific Solutions
+
+**GitHub Actions/CI:**
+- Containers automatically use `--network=host`
+- TTY flags are automatically removed
+- Host networking allows access to KinD clusters
+
+**Docker Desktop:**
+- Uses `--add-host kubernetes.docker.internal:host-gateway`
+- Works with Docker Desktop's built-in Kubernetes
+
+**Custom Environments:**
+```bash
+# Override network detection
+CI=true ./scripts/install.sh    # Force CI mode (host networking)
+# or
+CI=false ./scripts/install.sh   # Force local mode (Docker Desktop networking)
+```
 
 ## 📁 Project Structure
 
@@ -487,8 +753,6 @@ cloud-native-lgtm-stack/
 │   ├── install.ps1                                 # PowerShell 7+: Cross-platform installation
 │   ├── uninstall.sh                               # Bash: Complete cleanup
 │   ├── uninstall.ps1                              # PowerShell 7+: Cross-platform cleanup
-│   ├── update-grafana-dashboards.sh               # Bash: Dashboard updates
-│   ├── update-grafana-dashboards.ps1              # PowerShell 7+: Cross-platform dashboard updates
 │   ├── helm-container.sh                          # Bash: Containerized Helm wrapper
 │   ├── helm-container.ps1                         # PowerShell 7+: Cross-platform Helm wrapper
 │   ├── helm-utils.sh                              # Bash: Helm detection utilities
@@ -520,58 +784,21 @@ This will:
 
 ## 🔒 Production Deployment Guide
 
-This stack is configured for **LAB/TESTING environments** with extensive production guidance in configuration comments.
+This stack is configured for **LAB/TESTING environments**. Each configuration file contains detailed production guidance in comments.
 
-### 📝 Configuration Files Comments
-
-Each `.yaml` file contains detailed comments with:
-- **LAB/TESTING**: Current settings explanation
-- **PRODUCTION**: Recommended changes for production use
-- **Security considerations** for each component
-- **Resource scaling guidance** based on workload
-
-Look for comments like:
+**Key Production Changes:**
 ```yaml
-replicas: 1                     # PRODUCTION: Consider 2+ for HA with proper storage
-admin_password: "admin123"       # PRODUCTION: Use strong password + secrets
-insecure_skip_verify = true      // PRODUCTION: Use proper TLS verification
+replicas: 1                     # PRODUCTION: Use 2+ for HA
+admin_password: "admin123"       # PRODUCTION: Use strong passwords
+insecure_skip_verify = true      # PRODUCTION: Enable TLS verification
 ```
 
 ### 🚀 Production Checklist
 
-**Security & Authentication**:
-- [ ] Change all default passwords (Grafana, Minio)
-- [ ] Enable TLS/SSL for all component communications
-- [ ] Configure proper authentication (LDAP/OAuth for Grafana)
-- [ ] Use Kubernetes secrets instead of plain text passwords
-- [ ] Enable proper TLS certificate verification
-- [ ] Configure network policies for component isolation
-
-**High Availability & Storage**:
-- [ ] Enable persistence for Grafana dashboards/settings
-- [ ] Configure distributed mode for Minio (multiple instances)
-- [ ] Scale replica counts for critical components (2+)
-- [ ] Use high-performance storage classes for data persistence
-- [ ] Configure resource quotas and limits appropriately
-
-**Monitoring & Observability**:
-- [ ] Enable ServiceMonitor for Prometheus scraping
-- [ ] Configure proper resource requests/limits based on usage
-- [ ] Set up alerting rules and notification channels
-- [ ] Configure log retention policies
-- [ ] Enable trace sampling for high-traffic applications
-
-**Network & Access**:
-- [ ] Replace NodePort services with Ingress + TLS
-- [ ] Configure proper load balancers for external access
-- [ ] Set up DNS names instead of IP addresses
-- [ ] Enable ingress controllers with SSL termination
-
-**Node-Exporter Specific**:
-- [ ] Review security contexts and user permissions
-- [ ] Configure node selectors for worker-only deployment
-- [ ] Enable Pod Security Policies if required
-- [ ] Review host volume mount security implications
+**Security**: Change default passwords, enable TLS, use proper authentication
+**High Availability**: Scale replicas, enable persistence, use distributed storage
+**Monitoring**: Configure alerting, set retention policies, optimize resources
+**Network**: Use Ingress with TLS, configure load balancers, enable DNS
 
 ## 🤝 Contributing
 

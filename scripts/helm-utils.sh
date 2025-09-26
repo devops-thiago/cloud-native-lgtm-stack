@@ -1,20 +1,15 @@
 #!/bin/bash
 
 # Helm Utilities - Detect and use Helm (local or containerized)
-# FOR: Internal use by install/uninstall scripts
-# SOURCE: source ./helm-utils.sh
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Global variable to track Helm mode
 HELM_MODE=""
 
-# Function to detect Helm availability
 detect_helm() {
     if command -v helm >/dev/null 2>&1; then
         HELM_MODE="local"
@@ -33,16 +28,23 @@ detect_helm() {
     fi
 }
 
-# Function to run Helm command (local or containerized)
 run_helm() {
     case "$HELM_MODE" in
         "local")
             echo -e "${BLUE}🔧 Running local Helm: $*${NC}" >&2
-            helm "$@"
+            if [ -n "$KUBECONFIG" ]; then
+                KUBECONFIG="$KUBECONFIG" helm "$@"
+            else
+                helm "$@"
+            fi
             ;;
         "container")
             echo -e "${BLUE}🐳 Running containerized Helm: $*${NC}" >&2
-            "$(dirname "${BASH_SOURCE[0]}")/helm-container.sh" "$@"
+            if [ -n "$KUBECONFIG" ]; then
+                KUBECONFIG="$KUBECONFIG" "$(dirname "${BASH_SOURCE[0]}")/helm-container.sh" "$@"
+            else
+                "$(dirname "${BASH_SOURCE[0]}")/helm-container.sh" "$@"
+            fi
             ;;
         *)
             echo -e "${RED}❌ Helm mode not detected. Run detect_helm() first.${NC}" >&2
@@ -51,7 +53,6 @@ run_helm() {
     esac
 }
 
-# Function to add Helm repositories with retry logic
 helm_repo_add() {
     local repo_name="$1"
     local repo_url="$2"
@@ -73,7 +74,6 @@ helm_repo_add() {
     return 1
 }
 
-# Function to update Helm repositories
 helm_repo_update() {
     echo -e "${YELLOW}📦 Updating Helm repositories...${NC}"
     if run_helm repo update; then
@@ -81,32 +81,45 @@ helm_repo_update() {
         return 0
     else
         echo -e "${YELLOW}⚠️  Failed to update repositories, continuing anyway...${NC}" >&2
-        return 0  # Don't fail the installation for this
+        return 0
     fi
 }
 
-# Function to install/upgrade Helm release
 helm_install_upgrade() {
     local release_name="$1"
     local chart="$2"
     local namespace="$3"
-    shift 3  # Remove the first 3 arguments
+    shift 3
     local additional_args=("$@")
 
-    echo -e "${BLUE}🚀 Installing/upgrading Helm release: $release_name${NC}"
+    if [ "$DRY_RUN" = "true" ]; then
+        echo -e "${BLUE}🔍 Dry-run: Validating Helm release: $release_name${NC}"
 
-    if run_helm upgrade --install "$release_name" "$chart" \
-        --namespace "$namespace" \
-        "${additional_args[@]}"; then
-        echo -e "${GREEN}✅ Successfully deployed: $release_name${NC}"
-        return 0
+        if run_helm upgrade --install "$release_name" "$chart" \
+            --namespace "$namespace" \
+            --dry-run=server --debug \
+            "${additional_args[@]}"; then
+            echo -e "${GREEN}✅ Dry-run validation successful: $release_name${NC}"
+            return 0
+        else
+            echo -e "${RED}❌ Dry-run validation failed: $release_name${NC}" >&2
+            return 1
+        fi
     else
-        echo -e "${RED}❌ Failed to deploy: $release_name${NC}" >&2
-        return 1
+        echo -e "${BLUE}🚀 Installing/upgrading Helm release: $release_name${NC}"
+
+        if run_helm upgrade --install "$release_name" "$chart" \
+            --namespace "$namespace" \
+            "${additional_args[@]}"; then
+            echo -e "${GREEN}✅ Successfully deployed: $release_name${NC}"
+            return 0
+        else
+            echo -e "${RED}❌ Failed to deploy: $release_name${NC}" >&2
+            return 1
+        fi
     fi
 }
 
-# Function to uninstall Helm release
 helm_uninstall() {
     local release_name="$1"
     local namespace="$2"
@@ -126,7 +139,6 @@ helm_uninstall() {
     fi
 }
 
-# Function to prepare containerized Helm (pull images if needed)
 prepare_containerized_helm() {
     if [ "$HELM_MODE" = "container" ]; then
         echo -e "${YELLOW}📦 Preparing containerized Helm environment...${NC}"
@@ -140,7 +152,6 @@ prepare_containerized_helm() {
     fi
 }
 
-# Function to show Helm mode information
 show_helm_info() {
     echo -e "${BLUE}🔍 Helm Configuration:${NC}"
     case "$HELM_MODE" in

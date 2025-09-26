@@ -11,7 +11,39 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Configuration
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --kubeconfig)
+      export KUBECONFIG="$2"
+      shift 2
+      ;;
+    --namespace)
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    --release-prefix)
+      RELEASE_PREFIX="$2"
+      shift 2
+      ;;
+    --help|-h)
+      echo "Usage: $0 [OPTIONS]"
+      echo "Options:"
+      echo "  --kubeconfig PATH      Path to kubeconfig file"
+      echo "  --namespace NAMESPACE  Target namespace (default: default)"
+      echo "  --release-prefix PREFIX Helm release prefix (default: ltgm)"
+      echo "  --help                 Show this help"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
+# Configuration with environment variable fallbacks
 NAMESPACE=${NAMESPACE:-default}
 RELEASE_PREFIX=${RELEASE_PREFIX:-ltgm}
 
@@ -23,7 +55,6 @@ echo ""
 # Import Helm utilities
 source "$(dirname "${BASH_SOURCE[0]}")/helm-utils.sh"
 
-# Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
@@ -53,7 +84,6 @@ fi
 echo -e "${GREEN}✅ Prerequisites check passed${NC}"
 echo ""
 
-# Function to uninstall helm release (using utilities)
 uninstall_release() {
     local release_name=$1
     local component_name=$2
@@ -83,10 +113,16 @@ kubectl delete -f ../values/node-exporter-docker-desktop-daemonset.yaml --ignore
 echo -e "${GREEN}✅ Custom node-exporter cleaned up${NC}"
 echo ""
 
+# Clean up custom dashboard ConfigMaps
+echo -e "${YELLOW}🧹 Cleaning up custom dashboard ConfigMaps...${NC}"
+kubectl delete configmap grafana-custom-dashboards -n "$NAMESPACE" --ignore-not-found=true
+echo -e "${GREEN}✅ Custom dashboard ConfigMaps cleaned up${NC}"
+echo ""
+
 # Clean up PVCs if they exist
 echo -e "${YELLOW}🧹 Cleaning up Persistent Volume Claims...${NC}"
 
-PVCs=$(kubectl get pvc -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | awk '{print $1}' | grep -v NAME || echo "")
+PVCs=$(kubectl get pvc -n "$NAMESPACE" | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | awk '{print $1}' | grep -v NAME || echo "")
 
 if [ -n "$PVCs" ]; then
     echo "Found PVCs to clean up:"
@@ -95,8 +131,13 @@ if [ -n "$PVCs" ]; then
     read -p "Do you want to delete these PVCs? This will permanently delete all data! [y/N]: " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "$PVCs" | xargs kubectl delete pvc -n $NAMESPACE
-        echo -e "${GREEN}✅ PVCs deleted${NC}"
+        echo "$PVCs" | while read -r pvc; do
+            if [ -n "$pvc" ]; then
+                echo "Deleting PVC: $pvc"
+                kubectl delete pvc "$pvc" -n "$NAMESPACE" --ignore-not-found=true || echo "  Warning: Could not delete PVC $pvc"
+            fi
+        done
+        echo -e "${GREEN}✅ PVC deletion completed${NC}"
     else
         echo -e "${YELLOW}⚠️  PVCs left intact${NC}"
     fi
@@ -108,9 +149,9 @@ echo ""
 # Check for remaining resources
 echo -e "${YELLOW}🔍 Checking for remaining resources...${NC}"
 
-REMAINING_PODS=$(kubectl get pods -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | wc -l || echo "0")
-REMAINING_SERVICES=$(kubectl get svc -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | wc -l || echo "0")
-REMAINING_SECRETS=$(kubectl get secrets -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | wc -l || echo "0")
+REMAINING_PODS=$(kubectl get pods -n "$NAMESPACE" | grep -cE "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" || echo "0")
+REMAINING_SERVICES=$(kubectl get svc -n "$NAMESPACE" | grep -cE "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" || echo "0")
+REMAINING_SECRETS=$(kubectl get secrets -n "$NAMESPACE" | grep -cE "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" || echo "0")
 
 if [ "$REMAINING_PODS" -gt "0" ] || [ "$REMAINING_SERVICES" -gt "0" ] || [ "$REMAINING_SECRETS" -gt "0" ]; then
     echo -e "${YELLOW}⚠️  Some resources may still be terminating:${NC}"
@@ -130,7 +171,7 @@ if [ "$NAMESPACE" != "default" ] && [ "$NAMESPACE" != "kube-system" ]; then
     read -p "Do you want to delete the namespace '$NAMESPACE'? [y/N]: " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        kubectl delete namespace $NAMESPACE
+        kubectl delete namespace "$NAMESPACE"
         echo -e "${GREEN}✅ Namespace '$NAMESPACE' deleted${NC}"
     else
         echo -e "${YELLOW}⚠️  Namespace '$NAMESPACE' left intact${NC}"
@@ -151,6 +192,7 @@ echo "  ✅ Loki uninstalled"
 echo "  ✅ Node Exporter uninstalled"
 echo "  ✅ Kube-state-metrics uninstalled"
 echo "  ✅ Minio uninstalled"
+echo "  ✅ Custom dashboard ConfigMaps removed"
 echo ""
 echo -e "${YELLOW}🛠️  Manual cleanup (if needed):${NC}"
 echo "  # Remove any remaining resources"
