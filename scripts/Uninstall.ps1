@@ -1,35 +1,67 @@
-﻿# Cloud Native LTGM Stack Uninstallation Script
-# This script removes Loki, Tempo, Grafana, and Minio from Kubernetes
+<#
+.SYNOPSIS
+    Uninstalls the Cloud Native LGTM Stack from Kubernetes.
+
+.DESCRIPTION
+    This script removes all components of the LGTM stack from Kubernetes including
+    Loki, Tempo, Grafana, Minio, Alloy, and supporting components. It can optionally
+    clean up persistent volume claims and the namespace.
+
+.PARAMETER Namespace
+    Target Kubernetes namespace to clean up (default: default).
+
+.PARAMETER ReleasePrefix
+    Prefix of Helm releases to uninstall (default: ltgm).
+
+.PARAMETER Kubeconfig
+    Path to kubeconfig file. If not specified, uses KUBECONFIG environment variable or default location.
+
+.EXAMPLE
+    ./Uninstall.ps1
+    Uninstalls the LGTM stack from the default namespace.
+
+.EXAMPLE
+    ./Uninstall.ps1 -Namespace observability
+    Uninstalls the LGTM stack from the 'observability' namespace.
+
+.EXAMPLE
+    ./Uninstall.ps1 -Kubeconfig ./my-config.yaml -ReleasePrefix my-ltgm
+    Uninstalls using custom kubeconfig and release prefix.
+
+.NOTES
+    Requires:
+    - kubectl (Kubernetes CLI)
+    - Either Helm 3.x OR Docker (for containerized Helm)
+    - Access to a Kubernetes cluster
+    
+    WARNING: This script will prompt before deleting persistent data and namespaces.
+#>
 
 param(
     [string]$Namespace = $env:NAMESPACE ?? "default",
-    [string]$ReleasePrefix = $env:RELEASE_PREFIX ?? "ltgm"
+    [string]$ReleasePrefix = $env:RELEASE_PREFIX ?? "ltgm",
+    [string]$Kubeconfig
 )
 
+# Set kubeconfig if provided
+if ($Kubeconfig) {
+    if (Test-Path $Kubeconfig) {
+        $env:KUBECONFIG = $Kubeconfig
+        Write-Output "Using kubeconfig: $Kubeconfig"
+    }
+    else {
+        Write-Error "Kubeconfig file not found: $Kubeconfig"
+        exit 1
+    }
+}
+
+# Import common utilities
+$commonUtilsPath = Join-Path $PSScriptRoot "Common-Utils.ps1"
+. $commonUtilsPath
+
 # Import Helm utilities
-$scriptPath = Join-Path $PSScriptRoot "helm-utils.ps1"
+$scriptPath = Join-Path $PSScriptRoot "Helm-Utils.ps1"
 . $scriptPath
-
-# Function to write colored output
-function Write-ColorOutput {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message
-    )
-    Write-Output $Message
-}
-
-# Function to check if command exists
-function Test-Command {
-    param([string]$Command)
-    try {
-        $null = Get-Command $Command -ErrorAction Stop
-        return $true
-    }
-    catch {
-        return $false
-    }
-}
 
 Write-ColorOutput "🗑️  Starting Cloud Native LGTM Stack Uninstallation"
 Write-Output "Namespace: $Namespace"
@@ -68,7 +100,6 @@ catch {
 Write-ColorOutput "✅ Prerequisites check passed"
 Write-Output ""
 
-# Function to uninstall helm release (using utilities)
 function Remove-HelmRelease {
     param(
         [string]$ReleaseName,

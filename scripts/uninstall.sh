@@ -11,7 +11,40 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Configuration
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --kubeconfig)
+      KUBECONFIG_PATH="$2"
+      export KUBECONFIG="$2"
+      shift 2
+      ;;
+    --namespace)
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    --release-prefix)
+      RELEASE_PREFIX="$2"
+      shift 2
+      ;;
+    --help|-h)
+      echo "Usage: $0 [OPTIONS]"
+      echo "Options:"
+      echo "  --kubeconfig PATH      Path to kubeconfig file"
+      echo "  --namespace NAMESPACE  Target namespace (default: default)"
+      echo "  --release-prefix PREFIX Helm release prefix (default: ltgm)"
+      echo "  --help                 Show this help"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
+# Configuration with environment variable fallbacks
 NAMESPACE=${NAMESPACE:-default}
 RELEASE_PREFIX=${RELEASE_PREFIX:-ltgm}
 
@@ -23,7 +56,6 @@ echo ""
 # Import Helm utilities
 source "$(dirname "${BASH_SOURCE[0]}")/helm-utils.sh"
 
-# Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
@@ -53,7 +85,6 @@ fi
 echo -e "${GREEN}✅ Prerequisites check passed${NC}"
 echo ""
 
-# Function to uninstall helm release (using utilities)
 uninstall_release() {
     local release_name=$1
     local component_name=$2

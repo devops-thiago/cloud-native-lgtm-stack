@@ -1,4 +1,4 @@
-name: E2E Sequential Tests with Validation
+name: E2E Tests with Validation
 
 on:
   push:

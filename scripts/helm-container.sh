@@ -1,24 +1,18 @@
 #!/bin/bash
 
 # Containerized Helm Wrapper Script
-# FOR: Environments where Helm is not installed locally
-# USAGE: ./helm-container.sh [helm-commands]
-# REQUIRES: Docker installed and running
 
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Configuration
 HELM_IMAGE="alpine/helm:3.13.2"
 KUBECTL_IMAGE="alpine/kubectl:1.34.1"
 
-# Function to check if Docker is available
 check_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         echo -e "${RED}❌ Docker is not installed or not in PATH${NC}" >&2
@@ -33,7 +27,6 @@ check_docker() {
     fi
 }
 
-# Function to get kubeconfig path
 get_kubeconfig_path() {
     if [ -n "${KUBECONFIG:-}" ]; then
         echo "${KUBECONFIG}"
@@ -46,7 +39,6 @@ get_kubeconfig_path() {
     fi
 }
 
-# Function to run Helm in container
 run_helm_container() {
     local kubeconfig_path
     kubeconfig_path=$(get_kubeconfig_path)
@@ -56,20 +48,15 @@ run_helm_container() {
 
     echo -e "${BLUE}🐳 Running Helm in container: ${HELM_IMAGE}${NC}" >&2
 
-    # Mount kubeconfig and project directory, run helm command
-    # Add Docker Desktop network compatibility for kubernetes.docker.internal
-    # Use /tmp/kubeconfig to avoid permission issues with /root/.kube/config
-    # Mount a persistent Helm cache directory to preserve repository configuration
     local helm_cache_dir="${HOME}/.cache/helm-container"
     mkdir -p "${helm_cache_dir}"
 
-    # Detect CI environment for network and TTY settings
     local docker_network_args=()
     local docker_tty_args="-it"
     if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${RUNNER_OS:-}" ]; then
         echo -e "${YELLOW}🔧 CI environment detected, using host networking for KinD access${NC}" >&2
         docker_network_args=("--network=host")
-        docker_tty_args=""  # No TTY in CI
+        docker_tty_args=""
     else
         docker_network_args=("--add-host" "kubernetes.docker.internal:host-gateway")
     fi
@@ -87,14 +74,12 @@ run_helm_container() {
         "$@"
 }
 
-# Function to run kubectl in container (for verification)
 run_kubectl_container() {
     local kubeconfig_path
     kubeconfig_path=$(get_kubeconfig_path)
 
     echo -e "${BLUE}🐳 Running kubectl in container: ${KUBECTL_IMAGE}${NC}" >&2
 
-    # Detect CI environment for network settings (kubectl doesn't need TTY)
     local docker_network_args=()
     if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${RUNNER_OS:-}" ]; then
         docker_network_args=("--network=host")
@@ -110,7 +95,6 @@ run_kubectl_container() {
         "$@"
 }
 
-# Function to test cluster connectivity
 test_cluster_connection() {
     echo -e "${YELLOW}🔍 Testing Kubernetes cluster connectivity...${NC}"
     if run_kubectl_container cluster-info >/dev/null 2>&1; then
@@ -122,7 +106,6 @@ test_cluster_connection() {
     fi
 }
 
-# Function to pull required images
 pull_images() {
     echo -e "${YELLOW}📦 Pulling required container images...${NC}"
 
@@ -135,24 +118,25 @@ pull_images() {
     echo -e "${GREEN}✅ Container images ready${NC}"
 }
 
-# Main execution
 main() {
-    # Check prerequisites
     if ! check_docker; then
         exit 1
     fi
-
-    # If no arguments provided, show help
     if [ $# -eq 0 ]; then
         echo -e "${YELLOW}🐳 Containerized Helm Wrapper${NC}"
         echo ""
         echo -e "${BLUE}Usage:${NC}"
         echo "  $0 [helm-command] [args...]"
         echo ""
+        echo -e "${BLUE}Kubeconfig:${NC}"
+        echo "  Set KUBECONFIG environment variable or use default ~/.kube/config"
+        echo "  Example: KUBECONFIG=/path/to/config $0 version"
+        echo ""
         echo -e "${BLUE}Examples:${NC}"
         echo "  $0 version"
         echo "  $0 repo add grafana https://grafana.github.io/helm-charts"
         echo "  $0 install my-app ./chart"
+        echo "  KUBECONFIG=./my-config $0 list"
         echo ""
         echo -e "${BLUE}Special commands:${NC}"
         echo "  $0 --test-connection    # Test cluster connectivity"
@@ -161,7 +145,6 @@ main() {
         exit 0
     fi
 
-    # Handle special commands
     case "${1:-}" in
         --test-connection)
             test_cluster_connection
@@ -182,14 +165,12 @@ main() {
             ;;
     esac
 
-    # Test cluster connection first
     if ! test_cluster_connection; then
         echo -e "${RED}❌ Cluster connectivity test failed${NC}" >&2
         echo -e "${YELLOW}💡 Please check your kubeconfig and cluster status${NC}" >&2
         exit 1
     fi
 
-    # Run Helm command in container
     run_helm_container "$@"
 }
 

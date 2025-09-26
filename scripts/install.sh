@@ -1,17 +1,56 @@
 #!/bin/bash
 
 # Cloud Native LTGM Stack Installation Script
-# This script deploys Loki, Tempo, Grafana, and Minio on Kubernetes using Helm
 
 set -e
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Configuration
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --kubeconfig)
+      KUBECONFIG_PATH="$2"
+      export KUBECONFIG="$2"
+      shift 2
+      ;;
+    --namespace)
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    --release-prefix)
+      RELEASE_PREFIX="$2"
+      shift 2
+      ;;
+    --helm-timeout)
+      HELM_TIMEOUT="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    --help|-h)
+      echo "Usage: $0 [OPTIONS]"
+      echo "Options:"
+      echo "  --kubeconfig PATH      Path to kubeconfig file"
+      echo "  --namespace NAMESPACE  Target namespace (default: default)"
+      echo "  --release-prefix PREFIX Helm release prefix (default: ltgm)"
+      echo "  --helm-timeout TIMEOUT Helm timeout (default: 10m)"
+      echo "  --dry-run              Run in dry-run mode"
+      echo "  --help                 Show this help"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
 NAMESPACE=${NAMESPACE:-default}
 RELEASE_PREFIX=${RELEASE_PREFIX:-ltgm}
 HELM_TIMEOUT=${HELM_TIMEOUT:-10m}
@@ -29,18 +68,12 @@ echo "Helm Timeout: $HELM_TIMEOUT"
 echo "Dry Run: $DRY_RUN"
 echo ""
 
-# Import Helm utilities
 source "$(dirname "${BASH_SOURCE[0]}")/helm-utils.sh"
 
-# Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
-
-# Check prerequisites
 echo -e "${YELLOW}🔍 Checking prerequisites...${NC}"
-
-# Detect and configure Helm (local or containerized)
 if ! detect_helm; then
     echo -e "${RED}❌ Neither Helm nor Docker is available${NC}"
     echo -e "${YELLOW}💡 Please install either:${NC}"
@@ -49,10 +82,7 @@ if ! detect_helm; then
     exit 1
 fi
 
-# Show Helm configuration
 show_helm_info
-
-# Prepare containerized Helm if needed
 if ! prepare_containerized_helm; then
     exit 1
 fi
@@ -62,7 +92,6 @@ if ! command_exists kubectl; then
     exit 1
 fi
 
-# Check if kubectl can connect to cluster
 if ! kubectl cluster-info >/dev/null 2>&1; then
     echo -e "${RED}❌ Cannot connect to Kubernetes cluster. Please check your kubeconfig.${NC}"
     exit 1
@@ -71,7 +100,6 @@ fi
 echo -e "${GREEN}✅ Prerequisites check passed${NC}"
 echo ""
 
-# Add Helm repositories
 echo -e "${YELLOW}📦 Adding Helm repositories...${NC}"
 helm_repo_add grafana https://grafana.github.io/helm-charts
 helm_repo_add minio https://charts.min.io/
@@ -81,13 +109,11 @@ helm_repo_update
 echo -e "${GREEN}✅ Helm repositories configured${NC}"
 echo ""
 
-# Create namespace if it doesn't exist
 echo -e "${YELLOW}🏗️  Creating namespace if needed...${NC}"
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 echo -e "${GREEN}✅ Namespace $NAMESPACE ready${NC}"
 echo ""
 
-# Deploy Minio first (storage backend)
 echo -e "${YELLOW}🪣 Deploying Minio...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-minio" "minio/minio" "$NAMESPACE" \
     --values ../values/minio-values.yaml \
@@ -96,8 +122,6 @@ helm_install_upgrade "${RELEASE_PREFIX}-minio" "minio/minio" "$NAMESPACE" \
 echo -e "${GREEN}✅ Minio deployed successfully${NC}"
 echo ""
 
-
-# Deploy Loki
 echo -e "${YELLOW}📊 Deploying Loki...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-loki" "grafana/loki-distributed" "$NAMESPACE" \
     --values ../values/loki-distributed-values.yaml \
@@ -106,7 +130,6 @@ helm_install_upgrade "${RELEASE_PREFIX}-loki" "grafana/loki-distributed" "$NAMES
 echo -e "${GREEN}✅ Loki deployed successfully${NC}"
 echo ""
 
-# Deploy Tempo
 echo -e "${YELLOW}🔍 Deploying Tempo...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-tempo" "grafana/tempo-distributed" "$NAMESPACE" \
     --values ../values/tempo-distributed-values.yaml \
@@ -115,7 +138,6 @@ helm_install_upgrade "${RELEASE_PREFIX}-tempo" "grafana/tempo-distributed" "$NAM
 echo -e "${GREEN}✅ Tempo deployed successfully${NC}"
 echo ""
 
-# Deploy Mimir
 echo -e "${YELLOW}📊 Deploying Mimir...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-mimir" "grafana/mimir-distributed" "$NAMESPACE" \
     --values ../values/mimir-distributed-values.yaml \
@@ -124,7 +146,6 @@ helm_install_upgrade "${RELEASE_PREFIX}-mimir" "grafana/mimir-distributed" "$NAM
 echo -e "${GREEN}✅ Mimir deployed successfully${NC}"
 echo ""
 
-# Deploy Grafana
 echo -e "${YELLOW}📈 Deploying Grafana...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-grafana" "grafana/grafana" "$NAMESPACE" \
     --values ../values/grafana-values.yaml \
@@ -133,7 +154,6 @@ helm_install_upgrade "${RELEASE_PREFIX}-grafana" "grafana/grafana" "$NAMESPACE" 
 echo -e "${GREEN}✅ Grafana deployed successfully${NC}"
 echo ""
 
-# Deploy custom Grafana dashboards
 echo -e "${YELLOW}📊 Deploying custom Grafana dashboards...${NC}"
 if [ "$DRY_RUN" = "true" ]; then
     echo -e "${BLUE}🔍 Dry-run: Validating dashboard ConfigMap...${NC}"
@@ -151,7 +171,6 @@ else
         exit 1
     fi
 
-    # Wait a moment for the sidecar to pick up the dashboards
     echo -e "${YELLOW}⏳ Waiting for dashboard sidecar to process dashboards...${NC}"
     sleep 10
 
@@ -159,7 +178,6 @@ else
 fi
 echo ""
 
-# Deploy Alloy (Grafana Agent)
 echo -e "${YELLOW}🤖 Deploying Alloy (Grafana Agent)...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-alloy" "grafana/alloy" "$NAMESPACE" \
     --values ../values/alloy-values.yaml \
@@ -168,7 +186,6 @@ helm_install_upgrade "${RELEASE_PREFIX}-alloy" "grafana/alloy" "$NAMESPACE" \
 echo -e "${GREEN}✅ Alloy deployed successfully${NC}"
 echo ""
 
-# Deploy Kube-state-metrics
 echo -e "${YELLOW}📊 Deploying kube-state-metrics...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-kube-state-metrics" "prometheus-community/kube-state-metrics" "$NAMESPACE" \
     --values ../values/kube-state-metrics-values.yaml \
@@ -177,10 +194,7 @@ helm_install_upgrade "${RELEASE_PREFIX}-kube-state-metrics" "prometheus-communit
 echo -e "${GREEN}✅ Kube-state-metrics deployed successfully${NC}"
 echo ""
 
-# Deploy Node Exporter with environment detection
 echo -e "${YELLOW}📊 Deploying node-exporter...${NC}"
-
-# Detect if running on Docker Desktop (mount propagation issues)
 if kubectl get nodes -o jsonpath='{.items[0].metadata.name}' | grep -q docker-desktop; then
     echo -e "${YELLOW}🐳 Docker Desktop detected - using custom DaemonSet (mount propagation compatibility)${NC}"
     if [ "$DRY_RUN" = "true" ]; then

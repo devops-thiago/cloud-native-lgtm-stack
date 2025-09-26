@@ -1,40 +1,70 @@
-﻿# Cloud Native LTGM Stack Installation Script
-# This script deploys Loki, Tempo, Grafana, and Minio on Kubernetes using Helm
+<#
+.SYNOPSIS
+    Installs the Cloud Native LGTM Stack on Kubernetes.
+
+.DESCRIPTION
+    This script deploys Loki, Tempo, Grafana, and Minio on Kubernetes using Helm.
+    It supports both local Helm installation and containerized Helm (Docker required).
+    The script automatically detects your environment and adapts accordingly.
+
+.PARAMETER Namespace
+    Target Kubernetes namespace for deployment (default: default).
+
+.PARAMETER ReleasePrefix
+    Prefix for all Helm releases (default: ltgm).
+
+.PARAMETER HelmTimeout
+    Timeout for Helm install/upgrade operations (default: 10m).
+
+.PARAMETER Kubeconfig
+    Path to kubeconfig file. If not specified, uses KUBECONFIG environment variable or default location.
+
+.PARAMETER DryRun
+    Run in dry-run mode to validate without making changes.
+
+.EXAMPLE
+    ./Install.ps1
+    Installs the LGTM stack with default settings.
+
+.EXAMPLE
+    ./Install.ps1 -Namespace observability -DryRun
+    Validates installation to the 'observability' namespace without deploying.
+
+.EXAMPLE
+    ./Install.ps1 -Kubeconfig ./my-config.yaml -ReleasePrefix my-ltgm
+    Installs using custom kubeconfig and release prefix.
+
+.NOTES
+    Requires:
+    - kubectl (Kubernetes CLI)
+    - Either Helm 3.x OR Docker (for containerized Helm)
+    - Access to a Kubernetes cluster
+#>
 
 param(
     [string]$Namespace = $env:NAMESPACE ?? "default",
     [string]$ReleasePrefix = $env:RELEASE_PREFIX ?? "ltgm",
     [string]$HelmTimeout = $env:HELM_TIMEOUT ?? "10m",
+    [string]$Kubeconfig,
     [switch]$DryRun
 )
 
-# Import Helm utilities
-$scriptPath = Join-Path $PSScriptRoot "helm-utils.ps1"
+if ($Kubeconfig) {
+    if (Test-Path $Kubeconfig) {
+        $env:KUBECONFIG = $Kubeconfig
+        Write-Output "Using kubeconfig: $Kubeconfig"
+    }
+    else {
+        Write-Error "Kubeconfig file not found: $Kubeconfig"
+        exit 1
+    }
+}
+
+$commonUtilsPath = Join-Path $PSScriptRoot "Common-Utils.ps1"
+. $commonUtilsPath
+
+$scriptPath = Join-Path $PSScriptRoot "Helm-Utils.ps1"
 . $scriptPath
-
-# Pass dry-run flag to helm utilities via parameter
-
-# Function to write colored output
-function Write-ColorOutput {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message
-    )
-    # Use Write-Output for better compatibility
-    Write-Output $Message
-}
-
-# Function to check if command exists
-function Test-Command {
-    param([string]$Command)
-    try {
-        $null = Get-Command $Command -ErrorAction Stop
-        return $true
-    }
-    catch {
-        return $false
-    }
-}
 
 if ($DryRun) {
     Write-ColorOutput "🚀 Starting Cloud Native LGTM Stack Installation (DRY-RUN MODE)"
@@ -49,10 +79,7 @@ Write-Output "Helm Timeout: $HelmTimeout"
 Write-Output "Dry Run: $DryRun"
 Write-Output ""
 
-# Check prerequisites
 Write-ColorOutput "🔍 Checking prerequisites..."
-
-# Detect and configure Helm (local or containerized)
 if (-not (Test-Helm)) {
     Write-ColorOutput "❌ Neither Helm nor Docker is available"
     Write-ColorOutput "💡 Please install either:"
@@ -61,10 +88,7 @@ if (-not (Test-Helm)) {
     exit 1
 }
 
-# Show Helm configuration
 Show-HelmInfo
-
-# Prepare containerized Helm if needed
 if (-not (Initialize-ContainerizedHelm)) {
     exit 1
 }
@@ -73,8 +97,6 @@ if (-not (Test-Command "kubectl")) {
     Write-ColorOutput "❌ kubectl is not installed. Please install kubectl first."
     exit 1
 }
-
-# Check if kubectl can connect to cluster
 try {
     kubectl cluster-info 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -89,7 +111,6 @@ catch {
 Write-ColorOutput "✅ Prerequisites check passed"
 Write-Output ""
 
-# Add Helm repositories
 Write-ColorOutput "📦 Adding Helm repositories..."
 if (-not (Add-HelmRepo "grafana" "https://grafana.github.io/helm-charts")) { exit 1 }
 if (-not (Add-HelmRepo "minio" "https://charts.min.io/")) { exit 1 }
@@ -99,16 +120,13 @@ Update-HelmRepo
 Write-ColorOutput "✅ Helm repositories configured"
 Write-Output ""
 
-# Create namespace if it doesn't exist
 Write-ColorOutput "🏗️  Creating namespace if needed..."
 kubectl create namespace $Namespace --dry-run=client -o yaml | kubectl apply -f -
 Write-ColorOutput "✅ Namespace $Namespace ready"
 Write-Output ""
 
-# Get project root for values files
 $projectRoot = Split-Path $PSScriptRoot -Parent
 
-# Deploy Minio first (storage backend)
 Write-ColorOutput "🪣 Deploying Minio..."
 $minioValuesPath = Join-Path $projectRoot "values/minio-values.yaml"
 if (-not (Install-HelmRelease "${ReleasePrefix}-minio" "minio/minio" $Namespace -DryRun $DryRun "--values" $minioValuesPath "--wait" "--timeout=$HelmTimeout")) {
@@ -118,8 +136,6 @@ if (-not (Install-HelmRelease "${ReleasePrefix}-minio" "minio/minio" $Namespace 
 Write-ColorOutput "✅ Minio deployed successfully"
 Write-Output ""
 
-
-# Deploy Loki
 Write-ColorOutput "📊 Deploying Loki..."
 $lokiValuesPath = Join-Path $projectRoot "values/loki-distributed-values.yaml"
 if (-not (Install-HelmRelease "${ReleasePrefix}-loki" "grafana/loki-distributed" $Namespace -DryRun $DryRun "--values" $lokiValuesPath "--wait" "--timeout=$HelmTimeout")) {
@@ -129,7 +145,6 @@ if (-not (Install-HelmRelease "${ReleasePrefix}-loki" "grafana/loki-distributed"
 Write-ColorOutput "✅ Loki deployed successfully"
 Write-Output ""
 
-# Deploy Tempo
 Write-ColorOutput "🔍 Deploying Tempo..."
 $tempoValuesPath = Join-Path $projectRoot "values/tempo-distributed-values.yaml"
 if (-not (Install-HelmRelease "${ReleasePrefix}-tempo" "grafana/tempo-distributed" $Namespace -DryRun $DryRun "--values" $tempoValuesPath "--wait" "--timeout=$HelmTimeout")) {
@@ -139,7 +154,6 @@ if (-not (Install-HelmRelease "${ReleasePrefix}-tempo" "grafana/tempo-distribute
 Write-ColorOutput "✅ Tempo deployed successfully"
 Write-Output ""
 
-# Deploy Mimir
 Write-ColorOutput "📊 Deploying Mimir..."
 $mimirValuesPath = Join-Path $projectRoot "values/mimir-distributed-values.yaml"
 if (-not (Install-HelmRelease "${ReleasePrefix}-mimir" "grafana/mimir-distributed" $Namespace -DryRun $DryRun "--values" $mimirValuesPath "--wait" "--timeout=$HelmTimeout")) {
@@ -149,7 +163,6 @@ if (-not (Install-HelmRelease "${ReleasePrefix}-mimir" "grafana/mimir-distribute
 Write-ColorOutput "✅ Mimir deployed successfully"
 Write-Output ""
 
-# Deploy Grafana
 Write-ColorOutput "📈 Deploying Grafana..."
 $grafanaValuesPath = Join-Path $projectRoot "values/grafana-values.yaml"
 if (-not (Install-HelmRelease "${ReleasePrefix}-grafana" "grafana/grafana" $Namespace -DryRun $DryRun "--values" $grafanaValuesPath "--wait" "--timeout=$HelmTimeout")) {
@@ -159,7 +172,6 @@ if (-not (Install-HelmRelease "${ReleasePrefix}-grafana" "grafana/grafana" $Name
 Write-ColorOutput "✅ Grafana deployed successfully"
 Write-Output ""
 
-# Deploy custom Grafana dashboards
 Write-ColorOutput "📊 Deploying custom Grafana dashboards..."
 $dashboardsConfigPath = Join-Path $projectRoot "values/kubernetes-dashboards-configmap.yaml"
 

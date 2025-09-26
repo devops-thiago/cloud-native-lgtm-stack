@@ -1,27 +1,69 @@
-﻿# Containerized Helm Wrapper Script
-# FOR: Environments where Helm is not installed locally
-# USAGE: .\helm-container.ps1 [helm-commands]
-# REQUIRES: Docker installed and running
+<#
+.SYNOPSIS
+    Containerized Helm wrapper for environments without local Helm installation.
+
+.DESCRIPTION
+    This script runs Helm commands inside a Docker container, eliminating the need
+    to install Helm locally. It automatically mounts your kubeconfig and project
+    files, and handles network configuration for different environments (local, CI).
+
+.PARAMETER TestConnection
+    Tests connectivity to the Kubernetes cluster.
+
+.PARAMETER PullImages
+    Pre-pulls required container images.
+
+.PARAMETER Kubectl
+    Runs kubectl commands in container instead of Helm.
+
+.PARAMETER KubectlArgs
+    Arguments to pass to kubectl when using -Kubectl.
+
+.PARAMETER HelmArgs
+    Helm commands and arguments to execute in the container.
+
+.EXAMPLE
+    ./Helm-Container.ps1 version
+    Shows the Helm version from the container.
+
+.EXAMPLE
+    ./Helm-Container.ps1 repo add grafana https://grafana.github.io/helm-charts
+    Adds a Helm repository using the containerized Helm.
+
+.EXAMPLE
+    ./Helm-Container.ps1 -TestConnection
+    Tests connectivity to the Kubernetes cluster.
+
+.EXAMPLE
+    ./Helm-Container.ps1 -Kubectl -KubectlArgs get,nodes
+    Runs kubectl command in container to get cluster nodes.
+
+.NOTES
+    Requires:
+    - Docker installed and running
+    - Valid kubeconfig file
+    - Access to Docker Hub for container images
+    
+    The script automatically detects CI environments and adjusts network settings.
+#>
 
 param(
+    [switch]$TestConnection,
+    [switch]$PullImages,
+    [switch]$Kubectl,
+    [string[]]$KubectlArgs,
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$Arguments
+    [string[]]$HelmArgs
 )
+
+# Import common utilities
+$commonUtilsPath = Join-Path $PSScriptRoot "Common-Utils.ps1"
+. $commonUtilsPath
 
 # Configuration
 $HELM_IMAGE = "alpine/helm:3.13.2"
 $KUBECTL_IMAGE = "alpine/kubectl:1.34.1"
 
-# Function to write colored output
-function Write-ColorOutput {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message
-    )
-    Write-Output $Message
-}
-
-# Function to check if Docker is available
 function Test-Docker {
     try {
         $null = Get-Command docker -ErrorAction Stop
@@ -30,19 +72,18 @@ function Test-Docker {
             return $true
         }
         else {
-            Write-ColorOutput "❌ Docker is not running"
-            Write-ColorOutput "💡 Please start Docker to use containerized Helm"
+            Write-ColorOutput "❌ Docker is not running" "Red"
+            Write-ColorOutput "💡 Please start Docker to use containerized Helm" "Yellow"
             return $false
         }
     }
     catch {
-        Write-ColorOutput "❌ Docker is not installed or not in PATH"
-        Write-ColorOutput "💡 Please install Docker to use containerized Helm"
+        Write-ColorOutput "❌ Docker is not installed or not in PATH" "Red"
+        Write-ColorOutput "💡 Please install Docker to use containerized Helm" "Yellow"
         return $false
     }
 }
 
-# Function to get kubeconfig path
 function Get-KubeconfigPath {
     if ($env:KUBECONFIG) {
         return $env:KUBECONFIG
@@ -62,7 +103,6 @@ function Get-KubeconfigPath {
     }
 }
 
-# Function to run Helm in container
 function Invoke-HelmContainer {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
@@ -86,7 +126,7 @@ function Invoke-HelmContainer {
         }
     }
 
-    Write-ColorOutput "🐳 Running Helm in container: $HELM_IMAGE"
+    Write-ColorOutput "🐳 Running Helm in container: $HELM_IMAGE" "Blue"
 
     # Note: Path conversion not needed for current Docker setup
 
@@ -106,7 +146,7 @@ function Invoke-HelmContainer {
     $networkArgs = @()
     $ttyArgs = @("-it")
     if ($env:CI -eq "true" -or $env:GITHUB_ACTIONS -eq "true" -or $env:RUNNER_OS) {
-        Write-ColorOutput "🔧 CI environment detected, using host networking for KinD access" "Yellow"
+        Write-ColorOutput "🔧 CI environment detected, using host networking for KinD access"
         $networkArgs = @("--network=host")
         $ttyArgs = @()  # No TTY in CI
     }
@@ -130,7 +170,6 @@ function Invoke-HelmContainer {
     return $exitCode
 }
 
-# Function to run kubectl in container (for verification)
 function Invoke-KubectlContainer {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
@@ -139,7 +178,7 @@ function Invoke-KubectlContainer {
 
     $kubeconfigPath = Get-KubeconfigPath
 
-    Write-ColorOutput "🐳 Running kubectl in container: $KUBECTL_IMAGE"
+    Write-ColorOutput "🐳 Running kubectl in container: $KUBECTL_IMAGE" "Blue"
 
     # Detect CI environment and use host networking for kind/localhost access
     $networkArgs = @()
@@ -159,9 +198,8 @@ function Invoke-KubectlContainer {
     & docker @dockerArgs
 }
 
-# Function to test cluster connectivity
 function Test-ClusterConnection {
-    Write-ColorOutput "🔍 Testing Kubernetes cluster connectivity..."
+    Write-ColorOutput "🔍 Testing Kubernetes cluster connectivity..." "Yellow"
     try {
         Invoke-KubectlContainer "cluster-info" 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
@@ -169,97 +207,55 @@ function Test-ClusterConnection {
             return $true
         }
         else {
-            Write-ColorOutput "❌ Cannot connect to Kubernetes cluster"
+            Write-ColorOutput "❌ Cannot connect to Kubernetes cluster" "Red"
             return $false
         }
     }
     catch {
-        Write-ColorOutput "❌ Cannot connect to Kubernetes cluster"
+        Write-ColorOutput "❌ Cannot connect to Kubernetes cluster" "Red"
         return $false
     }
 }
 
-# Function to pull required images
 function Get-ContainerImage {
-    Write-ColorOutput "📦 Pulling required container images..."
+    Write-ColorOutput "📦 Pulling required container images..." "Yellow"
 
-    Write-ColorOutput "Pulling Helm image: $HELM_IMAGE"
+    Write-ColorOutput "Pulling Helm image: $HELM_IMAGE" "Blue"
     docker pull $HELM_IMAGE
 
-    Write-ColorOutput "Pulling kubectl image: $KUBECTL_IMAGE"
+    Write-ColorOutput "Pulling kubectl image: $KUBECTL_IMAGE" "Blue"
     docker pull $KUBECTL_IMAGE
 
-    Write-ColorOutput "✅ Container images ready"
+    Write-ColorOutput "✅ Container images ready" "Green"
 }
 
-# Function to show help
-function Show-Help {
-    Write-ColorOutput "🐳 Containerized Helm Wrapper"
-    Write-Output ""
-    Write-ColorOutput "Usage:"
-    Write-Output "  .\helm-container.ps1 [helm-command] [args...]"
-    Write-Output ""
-    Write-ColorOutput "Examples:"
-    Write-Output "  .\helm-container.ps1 version"
-    Write-Output "  .\helm-container.ps1 repo add grafana https://grafana.github.io/helm-charts"
-    Write-Output "  .\helm-container.ps1 install my-app ./chart"
-    Write-Output ""
-    Write-ColorOutput "Special commands:"
-    Write-Output "  .\helm-container.ps1 --test-connection    # Test cluster connectivity"
-    Write-Output "  .\helm-container.ps1 --pull-images        # Pre-pull container images"
-    Write-Output "  .\helm-container.ps1 --kubectl [args...]  # Run kubectl in container"
+if (-not (Test-Docker)) { exit 1 }
+
+if ($TestConnection) {
+    if (Test-ClusterConnection) { exit 0 } else { exit 1 }
 }
 
-# Main execution
-function Main {
-    # Check prerequisites
-    if (-not (Test-Docker)) {
+if ($PullImages) {
+    Get-ContainerImage
+    exit 0
+}
+
+if ($Kubectl) {
+    Invoke-KubectlContainer @KubectlArgs
+    exit $LASTEXITCODE
+}
+
+# Default: run Helm command if HelmArgs provided
+if ($HelmArgs -and $HelmArgs.Count -gt 0) {
+    if (-not (Test-ClusterConnection)) {
+        Write-ColorOutput "❌ Cluster connectivity test failed"
+        Write-ColorOutput "💡 Please check your kubeconfig and cluster status"
         exit 1
     }
-
-    # If no arguments provided, show help
-    if ($Arguments.Count -eq 0) {
-        Show-Help
-        exit 0
-    }
-
-    # Handle special commands
-    switch ($Arguments[0]) {
-        "--test-connection" {
-            if (Test-ClusterConnection) {
-                exit 0
-            }
-            else {
-                exit 1
-            }
-        }
-        "--pull-images" {
-            Get-ContainerImage
-            exit 0
-        }
-        "--kubectl" {
-            $kubectlArgs = $Arguments[1..($Arguments.Count - 1)]
-            Invoke-KubectlContainer @kubectlArgs
-            exit $LASTEXITCODE
-        }
-        { $_ -in "--help", "-h" } {
-            Show-Help
-            exit 0
-        }
-        default {
-            # Test cluster connection first
-            if (-not (Test-ClusterConnection)) {
-                Write-ColorOutput "❌ Cluster connectivity test failed"
-                Write-ColorOutput "💡 Please check your kubeconfig and cluster status"
-                exit 1
-            }
-
-            # Run Helm command in container
-            Invoke-HelmContainer @Arguments
-            exit $LASTEXITCODE
-        }
-    }
+    Invoke-HelmContainer @HelmArgs
+    exit $LASTEXITCODE
 }
 
-# Execute main function
-Main
+# If no parameters provided, show that Get-Help should be used
+Write-ColorOutput "💡 Use Get-Help .\Helm-Container.ps1 for usage information"
+exit 0
