@@ -318,3 +318,4 @@ Write-Output "  kubectl logs -l app.kubernetes.io/name=grafana -n $Namespace"
 Write-Output ""
 
 Write-ColorOutput "✅ Installation completed successfully!"
+exit 0
