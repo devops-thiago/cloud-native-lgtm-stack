@@ -98,8 +98,9 @@ jobs:
         echo "Running shellcheck on shell scripts..."
         sudo apt-get update && sudo apt-get install -y shellcheck
         cd scripts
-        shellcheck -x install.sh uninstall.sh helm-utils.sh helm-container.sh || echo "Shellcheck warnings found but continuing..."
-        echo "Shellcheck linting completed"
+        echo "Analyzing shell scripts with shellcheck..."
+        shellcheck -x install.sh uninstall.sh helm-utils.sh helm-container.sh
+        echo "Shellcheck linting completed successfully - no issues found"
 
     - name: "Script Validation - PSScriptAnalyzer Linting"
       shell: pwsh
@@ -109,13 +110,13 @@ jobs:
         Set-Location scripts
         $scripts = @('install.ps1', 'uninstall.ps1', 'helm-utils.ps1', 'helm-container.ps1')
         foreach ($script in $scripts) {
-            Write-Host "Analyzing $script..."
+            Write-Host "Analyzing ${script}..."
             $results = Invoke-ScriptAnalyzer -Path $script -Severity Warning,Error
             if ($results) {
-                Write-Host "Issues found in $script:" -ForegroundColor Yellow
+                Write-Host "Issues found in ${script}:" -ForegroundColor Yellow
                 $results | Format-Table -AutoSize
             } else {
-                Write-Host "No issues found in $script" -ForegroundColor Green
+                Write-Host "No issues found in ${script}" -ForegroundColor Green
             }
         }
         Write-Host "PSScriptAnalyzer linting completed"

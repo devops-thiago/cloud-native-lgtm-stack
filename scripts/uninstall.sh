@@ -85,14 +85,14 @@ echo ""
 
 # Clean up custom dashboard ConfigMaps
 echo -e "${YELLOW}🧹 Cleaning up custom dashboard ConfigMaps...${NC}"
-kubectl delete configmap grafana-custom-dashboards -n $NAMESPACE --ignore-not-found=true
+kubectl delete configmap grafana-custom-dashboards -n "$NAMESPACE" --ignore-not-found=true
 echo -e "${GREEN}✅ Custom dashboard ConfigMaps cleaned up${NC}"
 echo ""
 
 # Clean up PVCs if they exist
 echo -e "${YELLOW}🧹 Cleaning up Persistent Volume Claims...${NC}"
 
-PVCs=$(kubectl get pvc -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | awk '{print $1}' | grep -v NAME || echo "")
+PVCs=$(kubectl get pvc -n "$NAMESPACE" | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | awk '{print $1}' | grep -v NAME || echo "")
 
 if [ -n "$PVCs" ]; then
     echo "Found PVCs to clean up:"
@@ -104,7 +104,7 @@ if [ -n "$PVCs" ]; then
         echo "$PVCs" | while read -r pvc; do
             if [ -n "$pvc" ]; then
                 echo "Deleting PVC: $pvc"
-                kubectl delete pvc "$pvc" -n $NAMESPACE --ignore-not-found=true || echo "  Warning: Could not delete PVC $pvc"
+                kubectl delete pvc "$pvc" -n "$NAMESPACE" --ignore-not-found=true || echo "  Warning: Could not delete PVC $pvc"
             fi
         done
         echo -e "${GREEN}✅ PVC deletion completed${NC}"
@@ -119,9 +119,9 @@ echo ""
 # Check for remaining resources
 echo -e "${YELLOW}🔍 Checking for remaining resources...${NC}"
 
-REMAINING_PODS=$(kubectl get pods -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | wc -l || echo "0")
-REMAINING_SERVICES=$(kubectl get svc -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | wc -l || echo "0")
-REMAINING_SECRETS=$(kubectl get secrets -n $NAMESPACE | grep -E "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" | wc -l || echo "0")
+REMAINING_PODS=$(kubectl get pods -n "$NAMESPACE" | grep -cE "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" || echo "0")
+REMAINING_SERVICES=$(kubectl get svc -n "$NAMESPACE" | grep -cE "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" || echo "0")
+REMAINING_SECRETS=$(kubectl get secrets -n "$NAMESPACE" | grep -cE "(${RELEASE_PREFIX}|loki|tempo|mimir|grafana|minio|alloy)" || echo "0")
 
 if [ "$REMAINING_PODS" -gt "0" ] || [ "$REMAINING_SERVICES" -gt "0" ] || [ "$REMAINING_SECRETS" -gt "0" ]; then
     echo -e "${YELLOW}⚠️  Some resources may still be terminating:${NC}"
@@ -141,7 +141,7 @@ if [ "$NAMESPACE" != "default" ] && [ "$NAMESPACE" != "kube-system" ]; then
     read -p "Do you want to delete the namespace '$NAMESPACE'? [y/N]: " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        kubectl delete namespace $NAMESPACE
+        kubectl delete namespace "$NAMESPACE"
         echo -e "${GREEN}✅ Namespace '$NAMESPACE' deleted${NC}"
     else
         echo -e "${YELLOW}⚠️  Namespace '$NAMESPACE' left intact${NC}"

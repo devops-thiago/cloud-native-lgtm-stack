@@ -83,7 +83,7 @@ echo ""
 
 # Create namespace if it doesn't exist
 echo -e "${YELLOW}🏗️  Creating namespace if needed...${NC}"
-kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 echo -e "${GREEN}✅ Namespace $NAMESPACE ready${NC}"
 echo ""
 
@@ -91,7 +91,7 @@ echo ""
 echo -e "${YELLOW}🪣 Deploying Minio...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-minio" "minio/minio" "$NAMESPACE" \
     --values ../values/minio-values.yaml \
-    --wait --timeout=$HELM_TIMEOUT
+    --wait --timeout="$HELM_TIMEOUT"
 
 echo -e "${GREEN}✅ Minio deployed successfully${NC}"
 echo ""
@@ -101,7 +101,7 @@ echo ""
 echo -e "${YELLOW}📊 Deploying Loki...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-loki" "grafana/loki-distributed" "$NAMESPACE" \
     --values ../values/loki-distributed-values.yaml \
-    --wait --timeout=$HELM_TIMEOUT
+    --wait --timeout="$HELM_TIMEOUT"
 
 echo -e "${GREEN}✅ Loki deployed successfully${NC}"
 echo ""
@@ -110,7 +110,7 @@ echo ""
 echo -e "${YELLOW}🔍 Deploying Tempo...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-tempo" "grafana/tempo-distributed" "$NAMESPACE" \
     --values ../values/tempo-distributed-values.yaml \
-    --wait --timeout=$HELM_TIMEOUT
+    --wait --timeout="$HELM_TIMEOUT"
 
 echo -e "${GREEN}✅ Tempo deployed successfully${NC}"
 echo ""
@@ -119,7 +119,7 @@ echo ""
 echo -e "${YELLOW}📊 Deploying Mimir...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-mimir" "grafana/mimir-distributed" "$NAMESPACE" \
     --values ../values/mimir-distributed-values.yaml \
-    --wait --timeout=$HELM_TIMEOUT
+    --wait --timeout="$HELM_TIMEOUT"
 
 echo -e "${GREEN}✅ Mimir deployed successfully${NC}"
 echo ""
@@ -128,7 +128,7 @@ echo ""
 echo -e "${YELLOW}📈 Deploying Grafana...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-grafana" "grafana/grafana" "$NAMESPACE" \
     --values ../values/grafana-values.yaml \
-    --wait --timeout=$HELM_TIMEOUT
+    --wait --timeout="$HELM_TIMEOUT"
 
 echo -e "${GREEN}✅ Grafana deployed successfully${NC}"
 echo ""
@@ -137,14 +137,14 @@ echo ""
 echo -e "${YELLOW}📊 Deploying custom Grafana dashboards...${NC}"
 if [ "$DRY_RUN" = "true" ]; then
     echo -e "${BLUE}🔍 Dry-run: Validating dashboard ConfigMap...${NC}"
-    if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n $NAMESPACE --dry-run=server; then
+    if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n "$NAMESPACE" --dry-run=server; then
         echo -e "${GREEN}✅ Dashboard ConfigMap validation successful${NC}"
     else
         echo -e "${RED}❌ Dashboard ConfigMap validation failed${NC}"
         exit 1
     fi
 else
-    if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n $NAMESPACE; then
+    if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n "$NAMESPACE"; then
         echo -e "${GREEN}✅ Custom dashboards ConfigMap deployed successfully${NC}"
     else
         echo -e "${RED}❌ Failed to deploy custom dashboards ConfigMap${NC}"
@@ -163,7 +163,7 @@ echo ""
 echo -e "${YELLOW}🤖 Deploying Alloy (Grafana Agent)...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-alloy" "grafana/alloy" "$NAMESPACE" \
     --values ../values/alloy-values.yaml \
-    --wait --timeout=$HELM_TIMEOUT
+    --wait --timeout="$HELM_TIMEOUT"
 
 echo -e "${GREEN}✅ Alloy deployed successfully${NC}"
 echo ""
@@ -172,7 +172,7 @@ echo ""
 echo -e "${YELLOW}📊 Deploying kube-state-metrics...${NC}"
 helm_install_upgrade "${RELEASE_PREFIX}-kube-state-metrics" "prometheus-community/kube-state-metrics" "$NAMESPACE" \
     --values ../values/kube-state-metrics-values.yaml \
-    --wait --timeout=$HELM_TIMEOUT
+    --wait --timeout="$HELM_TIMEOUT"
 
 echo -e "${GREEN}✅ Kube-state-metrics deployed successfully${NC}"
 echo ""
@@ -193,13 +193,13 @@ if kubectl get nodes -o jsonpath='{.items[0].metadata.name}' | grep -q docker-de
         fi
     else
         kubectl apply -f ../values/node-exporter-docker-desktop-daemonset.yaml
-        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=node-exporter -n $NAMESPACE --timeout=120s
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=node-exporter -n "$NAMESPACE" --timeout=120s
     fi
 else
     echo -e "${YELLOW}⚙️  Standard Kubernetes detected - using Helm chart${NC}"
     helm_install_upgrade "${RELEASE_PREFIX}-node-exporter" "prometheus-community/prometheus-node-exporter" "$NAMESPACE" \
         --values ../values/node-exporter-values.yaml \
-        --wait --timeout=$HELM_TIMEOUT
+        --wait --timeout="$HELM_TIMEOUT"
 fi
 
 echo -e "${GREEN}✅ Node-exporter deployed successfully${NC}"
@@ -212,7 +212,7 @@ echo -e "${YELLOW}📋 Access Information:${NC}"
 echo ""
 
 # Get Grafana NodePort
-GRAFANA_NODEPORT=$(kubectl get svc ${RELEASE_PREFIX}-grafana -n $NAMESPACE -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "N/A")
+GRAFANA_NODEPORT=$(kubectl get svc "${RELEASE_PREFIX}-grafana" -n "$NAMESPACE" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "N/A")
 echo -e "${GREEN}Grafana:${NC}"
 echo "  URL: http://localhost:$GRAFANA_NODEPORT (if using port-forward)"
 echo "  Username: admin"
@@ -220,7 +220,7 @@ echo "  Password: admin123"
 echo ""
 
 # Get Minio Console NodePort
-MINIO_CONSOLE_NODEPORT=$(kubectl get svc ${RELEASE_PREFIX}-minio-console -n $NAMESPACE -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "N/A")
+MINIO_CONSOLE_NODEPORT=$(kubectl get svc "${RELEASE_PREFIX}-minio-console" -n "$NAMESPACE" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "N/A")
 echo -e "${GREEN}Minio Console:${NC}"
 if [ "$MINIO_CONSOLE_NODEPORT" != "N/A" ]; then
     echo "  URL: http://localhost:$MINIO_CONSOLE_NODEPORT (if using port-forward)"
