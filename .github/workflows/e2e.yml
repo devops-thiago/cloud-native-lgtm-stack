@@ -41,6 +41,7 @@ jobs:
             Get-Content ./Uninstall.ps1 | Out-Null
             Get-Content ./Helm-Utils.ps1 | Out-Null
             Get-Content ./Helm-Container.ps1 | Out-Null
+            Get-Content ./Common-Utils.ps1 | Out-Null
             Write-Host "PowerShell script syntax validation passed" -ForegroundColor Green
         } catch {
             Write-Host "PowerShell script syntax validation failed: $($_.Exception.Message)" -ForegroundColor Red
@@ -62,7 +63,7 @@ jobs:
         Write-Host "Installing and running PSScriptAnalyzer..."
         Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
         Set-Location scripts
-        $scripts = @('Install.ps1', 'Uninstall.ps1', 'Helm-Utils.ps1', 'Helm-Container.ps1')
+        $scripts = @('Install.ps1', 'Uninstall.ps1', 'Helm-Utils.ps1', 'Helm-Container.ps1', 'Common-Utils.ps1')
         foreach ($script in $scripts) {
             Write-Host "Analyzing ${script}..."
             $errorResults = Invoke-ScriptAnalyzer -Path $script -Severity Error
