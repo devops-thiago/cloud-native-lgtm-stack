@@ -66,8 +66,8 @@ function Invoke-Helm {
         "container" {
             Write-ColorOutput "🐳 Running containerized Helm: $($Arguments -join ' ')"
             $scriptPath = Join-Path $PSScriptRoot "helm-container.ps1"
-            $result = & $scriptPath @Arguments
-            return $result
+            & $scriptPath @Arguments | Out-Null
+            $global:LASTEXITCODE = $LASTEXITCODE
         }
         default {
             Write-ColorOutput "❌ Helm mode not detected. Run Test-Helm first."

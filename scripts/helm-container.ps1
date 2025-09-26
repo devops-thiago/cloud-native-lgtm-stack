@@ -118,6 +118,8 @@ function Invoke-HelmContainer {
     ) + $convertedArgs
 
     & docker @dockerArgs
+    $exitCode = $LASTEXITCODE
+    return $exitCode
 }
 
 # Function to run kubectl in container (for verification)
