@@ -12,7 +12,6 @@ NC='\033[0m'
 while [[ $# -gt 0 ]]; do
   case $1 in
     --kubeconfig)
-      KUBECONFIG_PATH="$2"
       export KUBECONFIG="$2"
       shift 2
       ;;
