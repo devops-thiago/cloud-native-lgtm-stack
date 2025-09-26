@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Containerized Helm wrapper for environments without local Helm installation.
 
@@ -43,7 +43,6 @@
     - Docker installed and running
     - Valid kubeconfig file
     - Access to Docker Hub for container images
-    
     The script automatically detects CI environments and adjusts network settings.
 #>
 
@@ -97,8 +96,8 @@ function Get-KubeconfigPath {
         return "$env:USERPROFILE\.kube\config"
     }
     else {
-        Write-ColorOutput "❌ No kubeconfig found"
-        Write-ColorOutput "💡 Please ensure kubectl is configured"
+        Write-ColorOutput "❌ No kubeconfig found" "Red"
+        Write-ColorOutput "💡 Please ensure kubectl is configured" "Yellow"
         throw "No kubeconfig found"
     }
 }
@@ -119,7 +118,7 @@ function Invoke-HelmContainer {
             # Convert absolute host path to container path
             $containerPath = $arg -replace [regex]::Escape($projectRoot), "/workspace"
             $convertedArgs += $containerPath
-            Write-ColorOutput "📁 Converting path: $arg -> $containerPath"
+            Write-ColorOutput "📝 Converting path: $arg -> $containerPath" "Blue"
         }
         else {
             $convertedArgs += $arg
@@ -146,7 +145,7 @@ function Invoke-HelmContainer {
     $networkArgs = @()
     $ttyArgs = @("-it")
     if ($env:CI -eq "true" -or $env:GITHUB_ACTIONS -eq "true" -or $env:RUNNER_OS) {
-        Write-ColorOutput "🔧 CI environment detected, using host networking for KinD access"
+        Write-ColorOutput "🔧 CI environment detected, using host networking for KinD access" "Blue"
         $networkArgs = @("--network=host")
         $ttyArgs = @()  # No TTY in CI
     }
@@ -203,7 +202,7 @@ function Test-ClusterConnection {
     try {
         Invoke-KubectlContainer "cluster-info" 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "✅ Kubernetes cluster is accessible"
+            Write-ColorOutput "✅ Kubernetes cluster is accessible" "Green"
             return $true
         }
         else {
@@ -248,8 +247,8 @@ if ($Kubectl) {
 # Default: run Helm command if HelmArgs provided
 if ($HelmArgs -and $HelmArgs.Count -gt 0) {
     if (-not (Test-ClusterConnection)) {
-        Write-ColorOutput "❌ Cluster connectivity test failed"
-        Write-ColorOutput "💡 Please check your kubeconfig and cluster status"
+        Write-ColorOutput "❌ Cluster connectivity test failed" "Red"
+        Write-ColorOutput "💡 Please check your kubeconfig and cluster status" "Yellow"
         exit 1
     }
     Invoke-HelmContainer @HelmArgs
@@ -257,5 +256,5 @@ if ($HelmArgs -and $HelmArgs.Count -gt 0) {
 }
 
 # If no parameters provided, show that Get-Help should be used
-Write-ColorOutput "💡 Use Get-Help .\Helm-Container.ps1 for usage information"
+Write-ColorOutput "💡 Use Get-Help .\Helm-Container.ps1 for usage information" "Blue"
 exit 0

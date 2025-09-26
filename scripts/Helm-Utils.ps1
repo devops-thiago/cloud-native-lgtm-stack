@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Helm utility functions for detecting and using Helm (local or containerized).
 
@@ -28,18 +28,18 @@ function Test-Helm {
         $helmVersion = helm version --short 2>$null
         if ($LASTEXITCODE -eq 0) {
             $script:HELM_MODE = "local"
-            Write-ColorOutput "✅ Helm found locally: $helmVersion"
+            Write-ColorOutput "✅ Helm found locally: $helmVersion" "Green"
             return $true
         }
     }
     catch {
-        Write-ColorOutput "⚠️  Helm not found locally, checking for Docker..."
+        Write-ColorOutput "⚠️  Helm not found locally, checking for Docker..." "Yellow"
     }
     try {
         docker info 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
             $script:HELM_MODE = "container"
-            Write-ColorOutput "🐳 Docker detected, will use containerized Helm"
+            Write-ColorOutput "🐳 Docker detected, will use containerized Helm" "Blue"
             return $true
         }
     }
@@ -66,7 +66,7 @@ function Invoke-Helm {
             return $result
         }
         "container" {
-            Write-ColorOutput "🐳 Running containerized Helm: $($Arguments -join ' ')"
+            Write-ColorOutput "🐳 Running containerized Helm: $($Arguments -join ' ')" "Blue"
             $scriptPath = Join-Path $PSScriptRoot "Helm-Container.ps1"
             & $scriptPath @Arguments | Out-Null
             $global:LASTEXITCODE = $LASTEXITCODE
@@ -99,11 +99,11 @@ function Add-HelmRepo {
         }
         catch {
             # Continue to retry logic - this is expected
-            Write-ColorOutput "⚠️  Repository add failed, will retry..."
+            Write-ColorOutput "⚠️  Repository add failed, will retry..." "Yellow"
         }
 
         $retryCount++
-        Write-ColorOutput "⚠️  Retry $retryCount/$maxRetries for repository: $RepoName"
+        Write-ColorOutput "⚠️  Retry $retryCount/$maxRetries for repository: $RepoName" "Yellow"
         Start-Sleep -Seconds 2
     }
 
@@ -112,7 +112,15 @@ function Add-HelmRepo {
 }
 
 function Update-HelmRepo {
-    Write-ColorOutput "📦 Updating Helm repositories..." "Yellow"
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([bool])]
+    param()
+    if ($PSCmdlet.ShouldProcess("Helm repositories", "Update")) {
+        Write-ColorOutput "📦 Updating Helm repositories..." "Yellow"
+    } else {
+        Write-ColorOutput "📦 Would update Helm repositories (WhatIf mode)" "Yellow"
+        return $true
+    }
     try {
         Invoke-Helm "repo", "update"
         if ($LASTEXITCODE -eq 0) {
@@ -121,7 +129,7 @@ function Update-HelmRepo {
         }
     }
     catch {
-        Write-ColorOutput "⚠️  Failed to update repositories, continuing anyway..."
+        Write-ColorOutput "⚠️  Failed to update repositories, continuing anyway..." "Yellow"
         return $true  # Don't fail the installation for this
     }
     return $true
@@ -142,7 +150,7 @@ function Install-HelmRelease {
     )
 
     if ($DryRun) {
-        Write-ColorOutput "🔍 Dry-run: Validating Helm release: $ReleaseName"
+        Write-ColorOutput "🔍 Dry-run: Validating Helm release: $ReleaseName" "Blue"
 
         $helmArgs = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace, "--dry-run=server", "--debug") + $AdditionalArgs
 
@@ -197,20 +205,20 @@ function Uninstall-HelmRelease {
     try {
         Invoke-Helm "status", $ReleaseName, "-n", $Namespace 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "🗑️  Uninstalling Helm release: $ReleaseName"
+            Write-ColorOutput "🗑️  Uninstalling Helm release: $ReleaseName" "Yellow"
             Invoke-Helm "uninstall", $ReleaseName, "-n", $Namespace
             if ($LASTEXITCODE -eq 0) {
-                Write-ColorOutput "✅ Successfully uninstalled: $ReleaseName"
+                Write-ColorOutput "✅ Successfully uninstalled: $ReleaseName" "Green"
                 return $true
             }
             else {
-                Write-ColorOutput "❌ Failed to uninstall: $ReleaseName"
+                Write-ColorOutput "❌ Failed to uninstall: $ReleaseName" "Red"
                 return $false
             }
         }
     }
     catch {
-        Write-ColorOutput "⚠️  Helm release not found, skipping: $ReleaseName"
+        Write-ColorOutput "⚠️  Helm release not found, skipping: $ReleaseName" "Yellow"
         return $true
     }
 }
