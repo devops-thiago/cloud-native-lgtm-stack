@@ -16,12 +16,9 @@ $KUBECTL_IMAGE = "alpine/kubectl:1.34.1"
 function Write-ColorOutput {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Message,
-        [Parameter(Mandatory = $false)]
-        [ValidateSet("Red", "Green", "Yellow", "Blue", "White")]
-        [string]$ForegroundColor = "White"
+        [string]$Message
     )
-    Write-Output $Message -ForegroundColor $ForegroundColor
+    Write-Output $Message
 }
 
 # Function to check if Docker is available
@@ -105,6 +102,16 @@ function Invoke-HelmContainer {
         New-Item -Path $helmCacheDir -ItemType Directory -Force | Out-Null
     }
 
+    # Detect CI environment and use host networking for kind/localhost access
+    $networkArgs = @()
+    if ($env:CI -eq "true" -or $env:GITHUB_ACTIONS -eq "true" -or $env:RUNNER_OS) {
+        Write-ColorOutput "🔧 CI environment detected, using host networking for KinD access" "Yellow"
+        $networkArgs = @("--network=host")
+    }
+    else {
+        $networkArgs = @("--add-host", "kubernetes.docker.internal:host-gateway")
+    }
+
     $dockerArgs = @(
         "run", "--rm", "-it",
         "-v", "${kubeconfigPath}:/tmp/kubeconfig:ro",
@@ -112,10 +119,8 @@ function Invoke-HelmContainer {
         "-v", "${helmCacheDir}:/root/.cache/helm",
         "-v", "${helmCacheDir}:/root/.config/helm",
         "-w", "/workspace/scripts",
-        "-e", "KUBECONFIG=/tmp/kubeconfig",
-        "--add-host", "kubernetes.docker.internal:host-gateway",
-        $HELM_IMAGE
-    ) + $convertedArgs
+        "-e", "KUBECONFIG=/tmp/kubeconfig"
+    ) + $networkArgs + @($HELM_IMAGE) + $convertedArgs
 
     & docker @dockerArgs
     $exitCode = $LASTEXITCODE
@@ -133,13 +138,20 @@ function Invoke-KubectlContainer {
 
     Write-ColorOutput "🐳 Running kubectl in container: $KUBECTL_IMAGE"
 
+    # Detect CI environment and use host networking for kind/localhost access
+    $networkArgs = @()
+    if ($env:CI -eq "true" -or $env:GITHUB_ACTIONS -eq "true" -or $env:RUNNER_OS) {
+        $networkArgs = @("--network=host")
+    }
+    else {
+        $networkArgs = @("--add-host", "kubernetes.docker.internal:host-gateway")
+    }
+
     $dockerArgs = @(
         "run", "--rm",
         "-v", "${kubeconfigPath}:/tmp/kubeconfig:ro",
-        "-e", "KUBECONFIG=/tmp/kubeconfig",
-        "--add-host", "kubernetes.docker.internal:host-gateway",
-        $KUBECTL_IMAGE
-    ) + $KubectlArgs
+        "-e", "KUBECONFIG=/tmp/kubeconfig"
+    ) + $networkArgs + @($KUBECTL_IMAGE) + $KubectlArgs
 
     & docker @dockerArgs
 }
