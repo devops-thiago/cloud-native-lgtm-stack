@@ -37,10 +37,10 @@ jobs:
         Write-Host "Validating PowerShell script syntax..."
         Set-Location scripts
         try {
-            Get-Content ./install.ps1 | Out-Null
-            Get-Content ./uninstall.ps1 | Out-Null
-            Get-Content ./helm-utils.ps1 | Out-Null
-            Get-Content ./helm-container.ps1 | Out-Null
+            Get-Content ./Install.ps1 | Out-Null
+            Get-Content ./Uninstall.ps1 | Out-Null
+            Get-Content ./Helm-Utils.ps1 | Out-Null
+            Get-Content ./Helm-Container.ps1 | Out-Null
             Write-Host "PowerShell script syntax validation passed" -ForegroundColor Green
         } catch {
             Write-Host "PowerShell script syntax validation failed: $($_.Exception.Message)" -ForegroundColor Red
@@ -62,7 +62,7 @@ jobs:
         Write-Host "Installing and running PSScriptAnalyzer..."
         Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
         Set-Location scripts
-        $scripts = @('install.ps1', 'uninstall.ps1', 'helm-utils.ps1', 'helm-container.ps1')
+        $scripts = @('Install.ps1', 'Uninstall.ps1', 'Helm-Utils.ps1', 'Helm-Container.ps1')
         foreach ($script in $scripts) {
             Write-Host "Analyzing ${script}..."
             $errorResults = Invoke-ScriptAnalyzer -Path $script -Severity Error
@@ -162,7 +162,7 @@ jobs:
       run: |
         Write-Host "Starting PowerShell Scripts with Local Helm (Dry-Run)"
         cd scripts
-        .\install.ps1 -Namespace "lgtm-test-ps" -ReleasePrefix "ps-test" -DryRun
+        .\Install.ps1 -Namespace "lgtm-test-ps" -ReleasePrefix "ps-test" -DryRun
 
     - name: "Local Helm Tests Summary"
       run: |
@@ -244,7 +244,7 @@ jobs:
       run: |
         Write-Host "Starting PowerShell Scripts with Containerized Helm (Dry-Run)"
         cd scripts
-        .\install.ps1 -Namespace "lgtm-test-ps-container" -ReleasePrefix "ps-container-test" -DryRun
+        .\Install.ps1 -Namespace "lgtm-test-ps-container" -ReleasePrefix "ps-container-test" -DryRun
 
     - name: "Containerized Helm Tests Summary"
       run: |
