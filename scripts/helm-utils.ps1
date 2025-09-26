@@ -140,24 +140,47 @@ function Install-HelmRelease {
         [string[]]$AdditionalArgs
     )
 
-    Write-ColorOutput "🚀 Installing/upgrading Helm release: $ReleaseName" "Blue"
-
-    $args = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace) + $AdditionalArgs
-
-    try {
-        Invoke-Helm @args
-        if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "✅ Successfully deployed: $ReleaseName" "Green"
-            return $true
+    if ($Global:DryRun) {
+        Write-ColorOutput "🔍 Dry-run: Validating Helm release: $ReleaseName" "Blue"
+        
+        $args = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace, "--dry-run=server", "--debug") + $AdditionalArgs
+        
+        try {
+            Invoke-Helm @args
+            if ($LASTEXITCODE -eq 0) {
+                Write-ColorOutput "✅ Dry-run validation successful: $ReleaseName" "Green"
+                return $true
+            }
+            else {
+                Write-ColorOutput "❌ Dry-run validation failed: $ReleaseName" "Red"
+                return $false
+            }
         }
-        else {
-            Write-ColorOutput "❌ Failed to deploy: $ReleaseName" "Red"
+        catch {
+            Write-ColorOutput "❌ Dry-run validation failed: $ReleaseName" "Red"
             return $false
         }
     }
-    catch {
-        Write-ColorOutput "❌ Failed to deploy: $ReleaseName" "Red"
-        return $false
+    else {
+        Write-ColorOutput "🚀 Installing/upgrading Helm release: $ReleaseName" "Blue"
+
+        $args = @("upgrade", "--install", $ReleaseName, $Chart, "--namespace", $Namespace) + $AdditionalArgs
+
+        try {
+            Invoke-Helm @args
+            if ($LASTEXITCODE -eq 0) {
+                Write-ColorOutput "✅ Successfully deployed: $ReleaseName" "Green"
+                return $true
+            }
+            else {
+                Write-ColorOutput "❌ Failed to deploy: $ReleaseName" "Red"
+                return $false
+            }
+        }
+        catch {
+            Write-ColorOutput "❌ Failed to deploy: $ReleaseName" "Red"
+            return $false
+        }
     }
 }
 

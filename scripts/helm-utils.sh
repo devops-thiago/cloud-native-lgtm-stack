@@ -93,16 +93,31 @@ helm_install_upgrade() {
     shift 3  # Remove the first 3 arguments
     local additional_args=("$@")
 
-    echo -e "${BLUE}🚀 Installing/upgrading Helm release: $release_name${NC}"
-
-    if run_helm upgrade --install "$release_name" "$chart" \
-        --namespace "$namespace" \
-        "${additional_args[@]}"; then
-        echo -e "${GREEN}✅ Successfully deployed: $release_name${NC}"
-        return 0
+    if [ "$DRY_RUN" = "true" ]; then
+        echo -e "${BLUE}🔍 Dry-run: Validating Helm release: $release_name${NC}"
+        
+        if run_helm upgrade --install "$release_name" "$chart" \
+            --namespace "$namespace" \
+            --dry-run=server --debug \
+            "${additional_args[@]}"; then
+            echo -e "${GREEN}✅ Dry-run validation successful: $release_name${NC}"
+            return 0
+        else
+            echo -e "${RED}❌ Dry-run validation failed: $release_name${NC}" >&2
+            return 1
+        fi
     else
-        echo -e "${RED}❌ Failed to deploy: $release_name${NC}" >&2
-        return 1
+        echo -e "${BLUE}🚀 Installing/upgrading Helm release: $release_name${NC}"
+
+        if run_helm upgrade --install "$release_name" "$chart" \
+            --namespace "$namespace" \
+            "${additional_args[@]}"; then
+            echo -e "${GREEN}✅ Successfully deployed: $release_name${NC}"
+            return 0
+        else
+            echo -e "${RED}❌ Failed to deploy: $release_name${NC}" >&2
+            return 1
+        fi
     fi
 }
 

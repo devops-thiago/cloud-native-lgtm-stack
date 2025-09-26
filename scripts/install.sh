@@ -15,11 +15,18 @@ NC='\033[0m' # No Color
 NAMESPACE=${NAMESPACE:-default}
 RELEASE_PREFIX=${RELEASE_PREFIX:-ltgm}
 HELM_TIMEOUT=${HELM_TIMEOUT:-10m}
+DRY_RUN=${DRY_RUN:-false}
 
-echo -e "${GREEN}🚀 Starting Cloud Native LGTM Stack Installation${NC}"
+if [ "$DRY_RUN" = "true" ]; then
+    echo -e "${GREEN}🚀 Starting Cloud Native LGTM Stack Installation (DRY-RUN MODE)${NC}"
+    echo -e "${YELLOW}⚠️  This is a dry-run - validating with server but making no changes${NC}"
+else
+    echo -e "${GREEN}🚀 Starting Cloud Native LGTM Stack Installation${NC}"
+fi
 echo "Namespace: $NAMESPACE"
 echo "Release Prefix: $RELEASE_PREFIX"
 echo "Helm Timeout: $HELM_TIMEOUT"
+echo "Dry Run: $DRY_RUN"
 echo ""
 
 # Import Helm utilities
@@ -89,12 +96,6 @@ helm_install_upgrade "${RELEASE_PREFIX}-minio" "minio/minio" "$NAMESPACE" \
 echo -e "${GREEN}✅ Minio deployed successfully${NC}"
 echo ""
 
-# Wait for Minio to be ready
-echo -e "${YELLOW}⏳ Waiting for Minio to be ready...${NC}"
-kubectl wait --for=condition=ready pod -l release=${RELEASE_PREFIX}-minio -n $NAMESPACE --timeout=300s
-
-echo -e "${GREEN}✅ Minio is ready${NC}"
-echo ""
 
 # Deploy Loki
 echo -e "${YELLOW}📊 Deploying Loki...${NC}"
@@ -134,18 +135,28 @@ echo ""
 
 # Deploy custom Grafana dashboards
 echo -e "${YELLOW}📊 Deploying custom Grafana dashboards...${NC}"
-if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n $NAMESPACE; then
-    echo -e "${GREEN}✅ Custom dashboards ConfigMap deployed successfully${NC}"
+if [ "$DRY_RUN" = "true" ]; then
+    echo -e "${BLUE}🔍 Dry-run: Validating dashboard ConfigMap...${NC}"
+    if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n $NAMESPACE --dry-run=server; then
+        echo -e "${GREEN}✅ Dashboard ConfigMap validation successful${NC}"
+    else
+        echo -e "${RED}❌ Dashboard ConfigMap validation failed${NC}"
+        exit 1
+    fi
 else
-    echo -e "${RED}❌ Failed to deploy custom dashboards ConfigMap${NC}"
-    exit 1
+    if kubectl apply -f ../values/kubernetes-dashboards-configmap.yaml -n $NAMESPACE; then
+        echo -e "${GREEN}✅ Custom dashboards ConfigMap deployed successfully${NC}"
+    else
+        echo -e "${RED}❌ Failed to deploy custom dashboards ConfigMap${NC}"
+        exit 1
+    fi
+
+    # Wait a moment for the sidecar to pick up the dashboards
+    echo -e "${YELLOW}⏳ Waiting for dashboard sidecar to process dashboards...${NC}"
+    sleep 10
+
+    echo -e "${GREEN}✅ Custom dashboards configured successfully${NC}"
 fi
-
-# Wait a moment for the sidecar to pick up the dashboards
-echo -e "${YELLOW}⏳ Waiting for dashboard sidecar to process dashboards...${NC}"
-sleep 10
-
-echo -e "${GREEN}✅ Custom dashboards configured successfully${NC}"
 echo ""
 
 # Deploy Alloy (Grafana Agent)
@@ -172,8 +183,18 @@ echo -e "${YELLOW}📊 Deploying node-exporter...${NC}"
 # Detect if running on Docker Desktop (mount propagation issues)
 if kubectl get nodes -o jsonpath='{.items[0].metadata.name}' | grep -q docker-desktop; then
     echo -e "${YELLOW}🐳 Docker Desktop detected - using custom DaemonSet (mount propagation compatibility)${NC}"
-    kubectl apply -f ../values/node-exporter-docker-desktop-daemonset.yaml
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=node-exporter -n $NAMESPACE --timeout=120s
+    if [ "$DRY_RUN" = "true" ]; then
+        echo -e "${BLUE}🔍 Dry-run: Validating node-exporter DaemonSet...${NC}"
+        if kubectl apply -f ../values/node-exporter-docker-desktop-daemonset.yaml --dry-run=server; then
+            echo -e "${GREEN}✅ Node-exporter DaemonSet validation successful${NC}"
+        else
+            echo -e "${RED}❌ Node-exporter DaemonSet validation failed${NC}"
+            exit 1
+        fi
+    else
+        kubectl apply -f ../values/node-exporter-docker-desktop-daemonset.yaml
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=node-exporter -n $NAMESPACE --timeout=120s
+    fi
 else
     echo -e "${YELLOW}⚙️  Standard Kubernetes detected - using Helm chart${NC}"
     helm_install_upgrade "${RELEASE_PREFIX}-node-exporter" "prometheus-community/prometheus-node-exporter" "$NAMESPACE" \
@@ -191,7 +212,7 @@ echo -e "${YELLOW}📋 Access Information:${NC}"
 echo ""
 
 # Get Grafana NodePort
-GRAFANA_NODEPORT=$(kubectl get svc ${RELEASE_PREFIX}-grafana -n $NAMESPACE -o jsonpath='{.spec.ports[0].nodePort}')
+GRAFANA_NODEPORT=$(kubectl get svc ${RELEASE_PREFIX}-grafana -n $NAMESPACE -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "N/A")
 echo -e "${GREEN}Grafana:${NC}"
 echo "  URL: http://localhost:$GRAFANA_NODEPORT (if using port-forward)"
 echo "  Username: admin"

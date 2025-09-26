@@ -4,12 +4,16 @@
 param(
     [string]$Namespace = $env:NAMESPACE ?? "default",
     [string]$ReleasePrefix = $env:RELEASE_PREFIX ?? "ltgm",
-    [string]$HelmTimeout = $env:HELM_TIMEOUT ?? "10m"
+    [string]$HelmTimeout = $env:HELM_TIMEOUT ?? "10m",
+    [switch]$DryRun
 )
 
 # Import Helm utilities
 $scriptPath = Join-Path $PSScriptRoot "helm-utils.ps1"
 . $scriptPath
+
+# Set global dry-run flag for helm utilities
+$Global:DryRun = $DryRun
 
 # Function to write colored output
 function Write-ColorOutput {
@@ -35,10 +39,17 @@ function Test-Command {
     }
 }
 
-Write-ColorOutput "🚀 Starting Cloud Native LGTM Stack Installation" "Green"
+if ($DryRun) {
+    Write-ColorOutput "🚀 Starting Cloud Native LGTM Stack Installation (DRY-RUN MODE)" "Green"
+    Write-ColorOutput "⚠️  This is a dry-run - validating with server but making no changes" "Yellow"
+}
+else {
+    Write-ColorOutput "🚀 Starting Cloud Native LGTM Stack Installation" "Green"
+}
 Write-Host "Namespace: $Namespace"
 Write-Host "Release Prefix: $ReleasePrefix"
 Write-Host "Helm Timeout: $HelmTimeout"
+Write-Host "Dry Run: $DryRun"
 Write-Host ""
 
 # Check prerequisites
@@ -110,12 +121,6 @@ if (-not (Install-HelmRelease "${ReleasePrefix}-minio" "minio/minio" $Namespace 
 Write-ColorOutput "✅ Minio deployed successfully" "Green"
 Write-Host ""
 
-# Wait for Minio to be ready
-Write-ColorOutput "⏳ Waiting for Minio to be ready..." "Yellow"
-kubectl wait --for=condition=ready pod -l "release=${ReleasePrefix}-minio" -n $Namespace --timeout=300s
-
-Write-ColorOutput "✅ Minio is ready" "Green"
-Write-Host ""
 
 # Deploy Loki
 Write-ColorOutput "📊 Deploying Loki..." "Yellow"
@@ -161,26 +166,45 @@ Write-Host ""
 Write-ColorOutput "📊 Deploying custom Grafana dashboards..." "Yellow"
 $dashboardsConfigPath = Join-Path $projectRoot "values/kubernetes-dashboards-configmap.yaml"
 
-try {
-    kubectl apply -f $dashboardsConfigPath -n $Namespace
-    if ($LASTEXITCODE -eq 0) {
-        Write-ColorOutput "✅ Custom dashboards ConfigMap deployed successfully" "Green"
+if ($DryRun) {
+    Write-ColorOutput "🔍 Dry-run: Validating dashboard ConfigMap..." "Blue"
+    try {
+        kubectl apply -f $dashboardsConfigPath -n $Namespace --dry-run=server
+        if ($LASTEXITCODE -eq 0) {
+            Write-ColorOutput "✅ Dashboard ConfigMap validation successful" "Green"
+        }
+        else {
+            Write-ColorOutput "❌ Dashboard ConfigMap validation failed" "Red"
+            exit 1
+        }
     }
-    else {
-        Write-ColorOutput "❌ Failed to deploy custom dashboards ConfigMap" "Red"
+    catch {
+        Write-ColorOutput "❌ Dashboard ConfigMap validation failed" "Red"
         exit 1
     }
 }
-catch {
-    Write-ColorOutput "❌ Failed to deploy custom dashboards ConfigMap" "Red"
-    exit 1
+else {
+    try {
+        kubectl apply -f $dashboardsConfigPath -n $Namespace
+        if ($LASTEXITCODE -eq 0) {
+            Write-ColorOutput "✅ Custom dashboards ConfigMap deployed successfully" "Green"
+        }
+        else {
+            Write-ColorOutput "❌ Failed to deploy custom dashboards ConfigMap" "Red"
+            exit 1
+        }
+    }
+    catch {
+        Write-ColorOutput "❌ Failed to deploy custom dashboards ConfigMap" "Red"
+        exit 1
+    }
+
+    # Wait a moment for the sidecar to pick up the dashboards
+    Write-ColorOutput "⏳ Waiting for dashboard sidecar to process dashboards..." "Yellow"
+    Start-Sleep -Seconds 10
+
+    Write-ColorOutput "✅ Custom dashboards configured successfully" "Green"
 }
-
-# Wait a moment for the sidecar to pick up the dashboards
-Write-ColorOutput "⏳ Waiting for dashboard sidecar to process dashboards..." "Yellow"
-Start-Sleep -Seconds 10
-
-Write-ColorOutput "✅ Custom dashboards configured successfully" "Green"
 Write-Host ""
 
 # Deploy Alloy (Grafana Agent)
@@ -211,8 +235,24 @@ $nodeName = kubectl get nodes -o jsonpath='{.items[0].metadata.name}' 2>$null
 if ($nodeName -match "docker-desktop") {
     Write-ColorOutput "🐳 Docker Desktop detected - using custom DaemonSet (mount propagation compatibility)" "Yellow"
     $nodeExporterDaemonSetPath = Join-Path $projectRoot "values/node-exporter-docker-desktop-daemonset.yaml"
-    kubectl apply -f $nodeExporterDaemonSetPath
-    kubectl wait --for=condition=ready pod -l "app.kubernetes.io/name=node-exporter" -n $Namespace --timeout=120s
+    if ($DryRun) {
+        Write-ColorOutput "🔍 Dry-run: Validating node-exporter DaemonSet..." "Blue"
+        try {
+            kubectl apply -f $nodeExporterDaemonSetPath --dry-run=server
+            if ($LASTEXITCODE -eq 0) {
+                Write-ColorOutput "✅ Node-exporter DaemonSet validation successful" "Green"
+            } else {
+                Write-ColorOutput "❌ Node-exporter DaemonSet validation failed" "Red"
+                exit 1
+            }
+        } catch {
+            Write-ColorOutput "❌ Node-exporter DaemonSet validation failed" "Red"
+            exit 1
+        }
+    } else {
+        kubectl apply -f $nodeExporterDaemonSetPath
+        kubectl wait --for=condition=ready pod -l "app.kubernetes.io/name=node-exporter" -n $Namespace --timeout=120s
+    }
 }
 else {
     Write-ColorOutput "⚙️  Standard Kubernetes detected - using Helm chart" "Yellow"

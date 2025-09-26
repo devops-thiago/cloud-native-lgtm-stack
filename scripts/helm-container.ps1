@@ -10,7 +10,7 @@ param(
 
 # Configuration
 $HELM_IMAGE = "alpine/helm:3.13.2"
-$KUBECTL_IMAGE = "alpine/kubectl:latest"
+$KUBECTL_IMAGE = "alpine/kubectl:1.34.1"
 
 # Function to write colored output
 function Write-ColorOutput {
@@ -75,6 +75,20 @@ function Invoke-HelmContainer {
     $kubeconfigPath = Get-KubeconfigPath
     $projectRoot = Split-Path $PSScriptRoot -Parent
 
+    # Convert host paths to container paths in Helm arguments
+    $convertedArgs = @()
+    foreach ($arg in $HelmArgs) {
+        if ($arg -match "^$([regex]::Escape($projectRoot))" -and ($arg -match "\.(yaml|yml)$" -or $arg -match "/values/")) {
+            # Convert absolute host path to container path
+            $containerPath = $arg -replace [regex]::Escape($projectRoot), "/workspace"
+            $convertedArgs += $containerPath
+            Write-ColorOutput "📁 Converting path: $arg -> $containerPath" "Blue"
+        }
+        else {
+            $convertedArgs += $arg
+        }
+    }
+
     Write-ColorOutput "🐳 Running Helm in container: $HELM_IMAGE" "Blue"
 
     # Convert Windows paths to Linux paths for Docker
@@ -103,7 +117,7 @@ function Invoke-HelmContainer {
         "-e", "KUBECONFIG=/tmp/kubeconfig",
         "--add-host", "kubernetes.docker.internal:host-gateway",
         $HELM_IMAGE
-    ) + $HelmArgs
+    ) + $convertedArgs
 
     & docker @dockerArgs
 }
