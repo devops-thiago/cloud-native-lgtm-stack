@@ -64,12 +64,12 @@ run_helm_container() {
     mkdir -p "${helm_cache_dir}"
 
     # Detect CI environment and use host networking for kind/localhost access
-    local docker_network_args=""
+    local docker_network_args=()
     if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${RUNNER_OS:-}" ]; then
         echo -e "${YELLOW}🔧 CI environment detected, using host networking for KinD access${NC}" >&2
-        docker_network_args="--network=host"
+        docker_network_args=("--network=host")
     else
-        docker_network_args="--add-host kubernetes.docker.internal:host-gateway"
+        docker_network_args=("--add-host" "kubernetes.docker.internal:host-gateway")
     fi
 
     docker run --rm -it \
@@ -79,7 +79,7 @@ run_helm_container() {
         -v "${helm_cache_dir}:/root/.config/helm" \
         -w /workspace/scripts \
         -e KUBECONFIG=/tmp/kubeconfig \
-        $docker_network_args \
+        "${docker_network_args[@]}" \
         "${HELM_IMAGE}" \
         "$@"
 }
@@ -92,17 +92,17 @@ run_kubectl_container() {
     echo -e "${BLUE}🐳 Running kubectl in container: ${KUBECTL_IMAGE}${NC}" >&2
 
     # Detect CI environment and use host networking for kind/localhost access
-    local docker_network_args=""
+    local docker_network_args=()
     if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${RUNNER_OS:-}" ]; then
-        docker_network_args="--network=host"
+        docker_network_args=("--network=host")
     else
-        docker_network_args="--add-host kubernetes.docker.internal:host-gateway"
+        docker_network_args=("--add-host" "kubernetes.docker.internal:host-gateway")
     fi
 
     docker run --rm \
         -v "${kubeconfig_path}:/tmp/kubeconfig:ro" \
         -e KUBECONFIG=/tmp/kubeconfig \
-        $docker_network_args \
+        "${docker_network_args[@]}" \
         "${KUBECTL_IMAGE}" \
         "$@"
 }
