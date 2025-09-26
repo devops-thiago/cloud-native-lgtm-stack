@@ -63,16 +63,19 @@ run_helm_container() {
     local helm_cache_dir="${HOME}/.cache/helm-container"
     mkdir -p "${helm_cache_dir}"
 
-    # Detect CI environment and use host networking for kind/localhost access
+    # Detect CI environment for network and TTY settings
     local docker_network_args=()
+    local docker_tty_args="-it"
     if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${RUNNER_OS:-}" ]; then
         echo -e "${YELLOW}🔧 CI environment detected, using host networking for KinD access${NC}" >&2
         docker_network_args=("--network=host")
+        docker_tty_args=""  # No TTY in CI
     else
         docker_network_args=("--add-host" "kubernetes.docker.internal:host-gateway")
     fi
 
-    docker run --rm -it \
+    # shellcheck disable=SC2086
+    docker run --rm $docker_tty_args \
         -v "${kubeconfig_path}:/tmp/kubeconfig:ro" \
         -v "${project_root}:/workspace" \
         -v "${helm_cache_dir}:/root/.cache/helm" \
@@ -91,7 +94,7 @@ run_kubectl_container() {
 
     echo -e "${BLUE}🐳 Running kubectl in container: ${KUBECTL_IMAGE}${NC}" >&2
 
-    # Detect CI environment and use host networking for kind/localhost access
+    # Detect CI environment for network settings (kubectl doesn't need TTY)
     local docker_network_args=()
     if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${RUNNER_OS:-}" ]; then
         docker_network_args=("--network=host")

@@ -102,18 +102,21 @@ function Invoke-HelmContainer {
         New-Item -Path $helmCacheDir -ItemType Directory -Force | Out-Null
     }
 
-    # Detect CI environment and use host networking for kind/localhost access
+    # Detect CI environment for network and TTY settings
     $networkArgs = @()
+    $ttyArgs = @("-it")
     if ($env:CI -eq "true" -or $env:GITHUB_ACTIONS -eq "true" -or $env:RUNNER_OS) {
         Write-ColorOutput "🔧 CI environment detected, using host networking for KinD access" "Yellow"
         $networkArgs = @("--network=host")
+        $ttyArgs = @()  # No TTY in CI
     }
     else {
         $networkArgs = @("--add-host", "kubernetes.docker.internal:host-gateway")
     }
 
     $dockerArgs = @(
-        "run", "--rm", "-it",
+        "run", "--rm"
+    ) + $ttyArgs + @(
         "-v", "${kubeconfigPath}:/tmp/kubeconfig:ro",
         "-v", "${projectRoot}:/workspace",
         "-v", "${helmCacheDir}:/root/.cache/helm",
